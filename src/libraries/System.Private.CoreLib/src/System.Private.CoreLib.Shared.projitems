@@ -491,6 +491,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)System\Reflection\ModuleResolveEventHandler.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Reflection\ObfuscateAssemblyAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Reflection\ObfuscationAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)System\Reflection\ObjectFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Reflection\ParameterAttributes.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Reflection\ParameterInfo.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)System\Reflection\ParameterModifier.cs" />

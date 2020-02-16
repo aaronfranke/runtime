@@ -6932,6 +6932,31 @@ mdToken FindNewobjCalliTypeSpec(IMDInternalImport* pInternalImport)
     COMPlusThrowHR(COR_E_BADIMAGEFORMAT);
 }
 
+mdToken FindParameterlessCtorCalliTypeSpec(IMDInternalImport* pInternalImport)
+{
+    STANDARD_VM_CONTRACT;
+
+    HENUMInternalHolder hEnumTypeSpecs(pInternalImport);
+    mdToken token;
+
+    // Signature soughtSig = MscorlibBinder::GetSignature(&gsig_SM_IntPtr_RetObj);
+
+    static const BYTE signature[] = { 0x00, 0x01, 0x01, 0x1c };
+
+
+    hEnumTypeSpecs.EnumAllInit(mdtMethodDef);
+    while (hEnumTypeSpecs.EnumNext(&token))
+    {
+        PCCOR_SIGNATURE pSig;
+        ULONG cbSig;
+        IfFailThrow(pInternalImport->GetSigFromToken(token, &cbSig, &pSig));
+        if (cbSig == sizeof(signature) && memcmp(pSig, signature, cbSig) == 0)
+            return token;
+    }
+
+    COMPlusThrowHR(COR_E_BADIMAGEFORMAT);
+}
+
 /*********************************************************************
 
 IL is the most efficient and portable way to implement certain low level methods
@@ -7412,11 +7437,26 @@ bool getILIntrinsicImplementationForRuntimeHelpers(MethodDesc * ftn,
 
     if (tk == MscorlibBinder::GetMethod(METHOD__RUNTIME_HELPERS__INVOKE_NEWOBJ_HELPER)->GetMemberDef())
     {
-       /* _ASSERTE(ftn->HasMethodInstantiation());
-        Instantiation inst = ftn->GetMethodInstantiation();
-
-        _ASSERTE(ftn->GetNumGenericMethodArgs() == 1);*/
         mdToken tokNewobjDesc = FindNewobjCalliTypeSpec(MscorlibBinder::GetModule()->GetMDImport());
+
+        static BYTE ilcode[] = { CEE_LDARG_0, CEE_LDARG_1, CEE_CALLI, 0,0,0,0, CEE_RET };
+
+        ilcode[3] = (BYTE)(tokNewobjDesc);
+        ilcode[4] = (BYTE)(tokNewobjDesc >> 8);
+        ilcode[5] = (BYTE)(tokNewobjDesc >> 16);
+        ilcode[6] = (BYTE)(tokNewobjDesc >> 24);
+
+        methInfo->ILCode = const_cast<BYTE*>(ilcode);
+        methInfo->ILCodeSize = sizeof(ilcode);
+        methInfo->maxStack = 2;
+        methInfo->EHcount = 0;
+        methInfo->options = (CorInfoOptions)0;
+        return true;
+    }
+
+    if (tk == MscorlibBinder::GetMethod(METHOD__RUNTIME_HELPERS__INVOKE_CTOR)->GetMemberDef())
+    {
+        mdToken tokNewobjDesc = FindParameterlessCtorCalliTypeSpec(MscorlibBinder::GetModule()->GetMDImport());
 
         static BYTE ilcode[] = { CEE_LDARG_0, CEE_LDARG_1, CEE_CALLI, 0,0,0,0, CEE_RET };
 

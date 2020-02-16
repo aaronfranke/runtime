@@ -13,6 +13,23 @@ namespace System.Reflection.Tests
     public class UninitializedObjectFactoryTests
     {
         [Fact]
+        public void CreateInitializedInstance()
+        {
+            Debugger.Launch();
+            Debugger.Break();
+
+            var factory = new ObjectFactory<SampleClass>();
+            var retVal = factory.CreateObject();
+            Assert.IsType<SampleClass>(retVal);
+            Assert.True(retVal.HasInstanceConstructorRun);
+
+            var factory2 = (IObjectFactory)factory;
+            var retVal2 = factory2.CreateObject();
+            Assert.IsType<SampleClass>(retVal2);
+            Assert.True(((SampleClass)retVal2).HasInstanceConstructorRun);
+        }
+
+        [Fact]
         public void CreateUninitializedInstance()
         {
             var factory = new UninitializedObjectFactory<SampleClass>();
@@ -28,7 +45,6 @@ namespace System.Reflection.Tests
 
         private class SampleClass
         {
-            public static bool HasStaticConstructorRun = true;
             public bool HasInstanceConstructorRun = true;
         }
     }

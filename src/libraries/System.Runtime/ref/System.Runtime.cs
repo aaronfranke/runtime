@@ -6710,6 +6710,16 @@ namespace System.Reflection
     {
         object? CreateUninitializedObject();
     }
+    public sealed partial class ObjectFactory<T> : IObjectFactory where T : class, new()
+    {
+        public ObjectFactory() { }
+        public T CreateObject() { throw null; }
+        object? IObjectFactory.CreateObject() { throw null; }
+    }
+    public interface IObjectFactory
+    {
+        object? CreateObject();
+    }
 }
 namespace System.Resources
 {

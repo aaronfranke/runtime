@@ -165,6 +165,15 @@ namespace System.Runtime.CompilerServices
             throw new InvalidOperationException();
         }
 
+        [Intrinsic]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void InvokeCtor(object @this, IntPtr ctorFn)
+        {
+            // The body of this function will be replaced by the EE with unsafe code!!!
+            // See getILIntrinsicImplementationForRuntimeHelpers for how this happens.
+            throw new InvalidOperationException();
+        }
+
         /// <returns>true if given type is reference type or value type that contains references</returns>
         [Intrinsic]
         public static bool IsReferenceOrContainsReferences<T>()
