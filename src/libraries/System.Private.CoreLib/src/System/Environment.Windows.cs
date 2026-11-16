@@ -151,15 +151,16 @@ namespace System
             }
 
             var version = new Version((int)osvi.dwMajorVersion, (int)osvi.dwMinorVersion, (int)osvi.dwBuildNumber, 0);
+            PlatformID platform = osvi.dwPlatformId == (uint)PlatformID.Win32Windows ? PlatformID.Win32Windows : PlatformID.Win32NT;
 
             if (osvi.szCSDVersion[0] != '\0')
             {
                 ReadOnlySpan<char> csd = osvi.szCSDVersion;
                 int idx = csd.IndexOf('\0');
-                return new OperatingSystem(PlatformID.Win32NT, version, new string(idx >= 0 ? csd[..idx] : csd));
+                return new OperatingSystem(platform, version, new string(idx >= 0 ? csd[..idx] : csd));
             }
 
-            return new OperatingSystem(PlatformID.Win32NT, version);
+            return new OperatingSystem(platform, version);
         }
 
         private static string? s_systemDirectory;
@@ -532,7 +533,7 @@ namespace System
 
         private static void GetUserName(ref ValueStringBuilder builder)
         {
-            // NT 4 predates the SAM-compatible Secur32 name query.
+            // NT 4 and Win9x predate the SAM-compatible Secur32 name query.
             if (!OperatingSystem.IsWindowsVersionAtLeast(5))
             {
                 GetLegacyUserName(ref builder);
@@ -578,6 +579,12 @@ namespace System
         {
             get
             {
+                if (OSVersion.Platform == PlatformID.Win32Windows)
+                {
+                    // Win9x does not expose NT account-domain lookup.
+                    throw new PlatformNotSupportedException();
+                }
+
                 // See the comment in UserName
                 var builder = new ValueStringBuilder(stackalloc char[40]);
                 GetUserName(ref builder);
@@ -810,7 +817,7 @@ namespace System
             {
                 // The shell's legacy CSIDL for Desktop is virtual. Query its filesystem counterpart.
                 SpecialFolder legacyFolder = folder == SpecialFolder.Desktop ? SpecialFolder.DesktopDirectory : folder;
-                string? path = Interop.Shell32.GetLegacyFolderPath((int)legacyFolder, (int)option);
+                string? path = Interop.Shell32.GetLegacyFolderPath((int)legacyFolder, (int)option, OSVersion.Platform == PlatformID.Win32Windows);
                 if (path != null)
                 {
                     return path;

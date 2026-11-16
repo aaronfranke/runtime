@@ -1,0 +1,69 @@
+<!--
+  Licensed to the .NET Foundation under one or more agreements.
+  The .NET Foundation licenses this file to you under the MIT license.
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <!-- Windows 9x predates the Vista Windows thread pool APIs. -->
+    <UseWindowsThreadPool>false</UseWindowsThreadPool>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.IO.UseWin32DirectoryEnumeration" Value="true" Trim="true" />
+    <RuntimeHostConfigurationOption Include="System.Runtime.UseLegacyWindowsClock" Value="true" Trim="true" />
+    <!-- Win9x cannot classify the implicit null read used by typed GC handle guards. -->
+    <RuntimeHostConfigurationOption Include="System.Runtime.InteropServices.UseExplicitGCHandleChecks" Value="true" Trim="true" />
+    <RuntimeHostConfigurationOption Include="System.Diagnostics.Process.UseToolhelpSnapshot" Value="true" Trim="true" />
+  </ItemGroup>
+
+  <Target Name="SetupWin9xNativeAot" AfterTargets="SetupOSSpecificProps">
+    <Error Condition="'$(_targetArchitecture)' != 'x86' or '$(OutputType)' != 'Exe' or '$(NativeLib)' != ''"
+           Text="The $(LegacyWindowsProfile) Native AOT profile currently supports win-x86 console applications." />
+    <Error Condition="'$(UseWindowsThreadPool)' != 'false'"
+           Text="The $(LegacyWindowsProfile) Native AOT profile requires the portable thread pool." />
+    <Error Condition="'$(_Win9xSoftwareXmm)' == 'true' and '$(EntryPointSymbol)' != 'Win95Startup'"
+           Text="The win_95 Native AOT profile requires the Win95Startup entry point." />
+    <Error Condition="'$(_Win9xSoftwareXmm)' == 'true' and
+                     (!Exists('$(Win95SoftFloatRoot)/source/include/softfloat.h') or
+                      !Exists('$(Win95SoftFloatRoot)/build/Win32-SSE2-MinGW/softfloat.a'))"
+           Text="Set Win95SoftFloatRoot to a Berkeley SoftFloat 3e tree with a Win32-SSE2-MinGW integer-only archive built with SafeSEH metadata." />
+
+    <PropertyGroup>
+      <CppLinker>$(_Win9xLldLink)</CppLinker>
+      <_Win9xCompatObject>$(NativeIntermediateOutputPath)$(LegacyWindowsProfile).obj</_Win9xCompatObject>
+      <_Win95StartupObject>$(NativeIntermediateOutputPath)Win95Startup.obj</_Win95StartupObject>
+      <_Win95XmmObject>$(NativeIntermediateOutputPath)Win95Xmm.obj</_Win95XmmObject>
+      <_Win95CompileDefine Condition="'$(_Win9xSoftwareXmm)' == 'true'">-DWIN95_NATIVE_AOT</_Win95CompileDefine>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(NativeIntermediateOutputPath)" />
+    <Exec Command="&quot;$(_Win9xGcc)&quot; -c -O2 -march=i686 -mno-sse -ffreestanding -fno-stack-protector -D_WIN32_WINNT=0x0A00 -DPSAPI_VERSION=1 $(_Win95CompileDefine) &quot;$(MSBuildThisFileDirectory)Win9xCompat.c&quot; -o &quot;$(_Win9xCompatObject)&quot;" />
+
+    <Exec Condition="'$(_Win9xSoftwareXmm)' == 'true'"
+          Command="&quot;$(Win95LlvmMc)&quot; --triple=i686-pc-windows-msvc --filetype=obj &quot;$(MSBuildThisFileDirectory)Win95Startup.s&quot; -o &quot;$(_Win95StartupObject)&quot;" />
+    <Exec Condition="'$(_Win9xSoftwareXmm)' == 'true'"
+          Command="&quot;$(_Win9xGcc)&quot; -c -O2 -march=i686 -mno-sse -mno-sse2 -ffreestanding -fno-stack-protector -D_WIN32_WINNT=0x0A00 -I&quot;$(Win95SoftFloatRoot)/source/include&quot; &quot;$(MSBuildThisFileDirectory)Win95Xmm.c&quot; -o &quot;$(_Win95XmmObject)&quot;" />
+
+    <ItemGroup>
+      <!-- Binding unavailable APIs at load time prevents the process from starting. -->
+      <DirectPInvokeList Remove="$(MSBuildThisFileDirectory)WindowsAPIs.txt" />
+      <DirectPInvokeList Include="$(MSBuildThisFileDirectory)Win98APIs.txt" />
+      <!-- Managed CRT calls also use the static UCRT, which provides the wide entry point. -->
+      <DirectPInvoke Include="ucrtbase" />
+      <!-- link.exe has a 5.01 floor. LLD writes both PE version fields as 4.00. -->
+      <LinkerArg Remove="/SUBSYSTEM:$(LinkerSubsystem);/NODEFAULTLIB:libucrt.lib;/DEFAULTLIB:ucrt.lib" />
+      <LinkerArg Include="/SUBSYSTEM:CONSOLE,4.0;/NODEFAULTLIB:ucrt.lib;/DEFAULTLIB:libucrt.lib" />
+      <!-- LLD does not accept MSVC's /SOURCELINK option. -->
+      <LinkerArg Remove="@(LinkerArg)" Condition="$([System.String]::Copy('%(LinkerArg.Identity)').StartsWith('/SOURCELINK:'))" />
+      <!-- Define the compatibility symbols before LLD reads the SDK import libraries. -->
+      <_Win9xObjects Include="$(_Win9xCompatObject)" />
+      <_Win9xObjects Condition="'$(_Win9xSoftwareXmm)' == 'true'"
+                    Include="$(_Win95StartupObject);$(_Win95XmmObject);$(Win95SoftFloatRoot)/build/Win32-SSE2-MinGW/softfloat.a" />
+      <NativeLibrary Include="@(_Win9xObjects)" />
+      <_Win9xLinkerArg Include="@(LinkerArg)" />
+      <LinkerArg Remove="@(LinkerArg)" />
+      <LinkerArg Include="@(_Win9xObjects->'&quot;%(Identity)&quot;')" />
+      <LinkerArg Include="@(_Win9xLinkerArg)" />
+    </ItemGroup>
+  </Target>
+</Project>

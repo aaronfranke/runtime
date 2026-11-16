@@ -24,7 +24,7 @@ __asm__(".def @feat.00; .scl 3; .type 0; .endef\n.set @feat.00, 1");
 
 /* EventSetInformation arrived in Windows 8. ETW provider traits are optional
    on Windows 7, so report unsupported rather than failing EventSource startup.
-   NT4/NT5 also lack mandatory modern ETW registration APIs; this adapter alone
+   NT4/NT5/9x also lack mandatory modern ETW registration APIs; this adapter alone
    does not enable native diagnostics on those older profiles. */
 typedef ULONG (WINAPI *event_set_information_fn)(ULONGLONG, ULONG, void *, ULONG);
 static INIT_ONCE event_information_once = INIT_ONCE_STATIC_INIT;

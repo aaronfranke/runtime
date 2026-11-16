@@ -420,7 +420,14 @@ namespace System.Diagnostics
                     out processTimes._create, out processTimes._exit,
                     out processTimes._kernel, out processTimes._user))
                 {
-                    throw new Win32Exception();
+                    int error = Marshal.GetLastPInvokeError();
+                    if (error == Interop.Errors.ERROR_CALL_NOT_IMPLEMENTED &&
+                        Environment.OSVersion.Platform == PlatformID.Win32Windows)
+                    {
+                        throw new PlatformNotSupportedException(SR.ProcessThreadTimesNotSupported);
+                    }
+
+                    throw new Win32Exception(error);
                 }
 
                 return processTimes;
@@ -676,6 +683,21 @@ namespace System.Diagnostics
         /// </remarks>
         private bool IsParentOf(Process possibleChild)
         {
+            if (ProcessManager.UseToolhelpSnapshot)
+            {
+                if (possibleChild.Id == Id || possibleChild._processInfo?.ParentProcessId != Id)
+                {
+                    return false;
+                }
+
+                // The kill walk holds a handle to each candidate. Re-read the
+                // parent after opening that handle to detect a changed snapshot.
+                ProcessInfo? current = ProcessManager.GetProcessInfo(possibleChild.Id, ".", isRemoteMachine: false);
+                return current?.ParentProcessId == Id &&
+                    (!TryGetStartTime(out DateTime parentTime) ||
+                     !possibleChild.TryGetStartTime(out DateTime childTime) || parentTime <= childTime);
+            }
+
             // Use non-throwing helpers to avoid first-chance exceptions during enumeration.
             // This is critical for performance when a debugger is attached.
             if (!TryGetStartTime(out DateTime myStartTime) ||
@@ -765,6 +787,11 @@ namespace System.Diagnostics
                 return false;
             }
 
+            if (ProcessManager.UseToolhelpSnapshot)
+            {
+                return true;
+            }
+
             // Use non-throwing helper to avoid first-chance exceptions during enumeration.
             if (!TryGetStartTime(out DateTime myStartTime) ||
                 !process.TryGetStartTime(out DateTime otherStartTime))
@@ -785,13 +812,17 @@ namespace System.Diagnostics
                 if (handle.IsInvalid)
                     return null;
 
-                return KillTree(handle);
+                return KillTree(handle, ProcessManager.UseToolhelpSnapshot ? new HashSet<int>() : null);
             }
         }
 
-        private List<Exception>? KillTree(SafeProcessHandle handle)
+        private List<Exception>? KillTree(SafeProcessHandle handle, HashSet<int>? visited)
         {
             Debug.Assert(!handle.IsInvalid);
+            if (visited?.Add(Id) == false)
+            {
+                return null;
+            }
 
             List<Exception>? exceptions = null;
 
@@ -812,7 +843,7 @@ namespace System.Diagnostics
             {
                 foreach ((Process Process, SafeProcessHandle Handle) child in children)
                 {
-                    List<Exception>? exceptionsFromChild = child.Process.KillTree(child.Handle);
+                    List<Exception>? exceptionsFromChild = child.Process.KillTree(child.Handle, visited);
                     if (exceptionsFromChild != null)
                     {
                         (exceptions ??= new List<Exception>()).AddRange(exceptionsFromChild);

@@ -81,7 +81,14 @@ namespace Internal.Runtime.CompilerHelpers
         [SupportedOSPlatform("windows")]
         private static void InitializeApartmentState(ApartmentState state)
         {
-            Thread.CurrentThread.SetApartmentState(state);
+            try
+            {
+                Thread.CurrentThread.SetApartmentState(state);
+            }
+            catch (PlatformNotSupportedException) when (state == ApartmentState.MTA)
+            {
+                // The default entry point can run without COM on Windows 95 without MTA support.
+            }
         }
 #endif
     }

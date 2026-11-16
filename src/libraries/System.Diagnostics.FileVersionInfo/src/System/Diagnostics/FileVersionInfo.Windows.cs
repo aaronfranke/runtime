@@ -4,12 +4,15 @@
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 
 namespace System.Diagnostics
 {
     public sealed partial class FileVersionInfo
     {
         private static bool UseLegacyVersionApi => !OperatingSystem.IsWindowsVersionAtLeast(6);
+
+        private static bool UseAnsiVersionApi => Environment.OSVersion.Platform == PlatformID.Win32Windows;
 
         private unsafe FileVersionInfo(string fileName)
         {
@@ -69,6 +72,11 @@ namespace System.Diagnostics
             uint langid = GetLanguageAndCodePage(memPtr) >> 16;
 
             const int MaxLength = 256;
+            if (UseAnsiVersionApi)
+            {
+                return LegacyVersion.GetAnsiLanguageName(langid);
+            }
+
             char* lang = stackalloc char[MaxLength];
             int charsWritten = Interop.Kernel32.VerLanguageName(langid, lang, MaxLength);
             return new string(lang, 0, charsWritten);
@@ -79,7 +87,9 @@ namespace System.Diagnostics
             if (QueryVersionValue(memPtr, name, out void* memRef) &&
                 memRef is not null)
             {
-                return Marshal.PtrToStringUni((IntPtr)memRef)!;
+                return UseAnsiVersionApi
+                    ? AnsiStringMarshaller.ConvertToManaged((byte*)memRef)!
+                    : Marshal.PtrToStringUni((IntPtr)memRef)!;
             }
 
             return string.Empty;
@@ -146,27 +156,55 @@ namespace System.Diagnostics
             // so load the library by its system path and retain it for the lifetime of these exports.
             private static readonly IntPtr s_library = NativeLibrary.Load(Path.Combine(Environment.SystemDirectory, Interop.Libraries.Version));
 
+            // Win9x exports stubs for the Unicode version APIs. Pre-Vista NT has working Unicode exports.
+            private static readonly string s_suffix = UseAnsiVersionApi ? "A" : "W";
             private static readonly delegate* unmanaged[Stdcall]<void*, uint*, uint> s_getSize =
-                (delegate* unmanaged[Stdcall]<void*, uint*, uint>)NativeLibrary.GetExport(s_library, "GetFileVersionInfoSizeW");
+                (delegate* unmanaged[Stdcall]<void*, uint*, uint>)NativeLibrary.GetExport(s_library, "GetFileVersionInfoSize" + s_suffix);
             private static readonly delegate* unmanaged[Stdcall]<void*, uint, uint, void*, int> s_read =
-                (delegate* unmanaged[Stdcall]<void*, uint, uint, void*, int>)NativeLibrary.GetExport(s_library, "GetFileVersionInfoW");
+                (delegate* unmanaged[Stdcall]<void*, uint, uint, void*, int>)NativeLibrary.GetExport(s_library, "GetFileVersionInfo" + s_suffix);
             private static readonly delegate* unmanaged[Stdcall]<void*, void*, void**, uint*, int> s_query =
-                (delegate* unmanaged[Stdcall]<void*, void*, void**, uint*, int>)NativeLibrary.GetExport(s_library, "VerQueryValueW");
+                (delegate* unmanaged[Stdcall]<void*, void*, void**, uint*, int>)NativeLibrary.GetExport(s_library, "VerQueryValue" + s_suffix);
 
             internal static uint GetSize(string fileName)
             {
                 uint ignoredHandle;
-                fixed (char* path = fileName)
+                if (!UseAnsiVersionApi)
                 {
-                    return s_getSize(path, &ignoredHandle);
+                    fixed (char* path = fileName)
+                    {
+                        return s_getSize(path, &ignoredHandle);
+                    }
+                }
+
+                byte* ansiPath = AnsiStringMarshaller.ConvertToUnmanaged(fileName);
+                try
+                {
+                    return s_getSize(ansiPath, &ignoredHandle);
+                }
+                finally
+                {
+                    AnsiStringMarshaller.Free(ansiPath);
                 }
             }
 
             internal static bool Read(string fileName, uint size, void* buffer)
             {
-                fixed (char* path = fileName)
+                if (!UseAnsiVersionApi)
                 {
-                    return s_read(path, 0, size, buffer) != 0;
+                    fixed (char* path = fileName)
+                    {
+                        return s_read(path, 0, size, buffer) != 0;
+                    }
+                }
+
+                byte* ansiPath = AnsiStringMarshaller.ConvertToUnmanaged(fileName);
+                try
+                {
+                    return s_read(ansiPath, 0, size, buffer) != 0;
+                }
+                finally
+                {
+                    AnsiStringMarshaller.Free(ansiPath);
                 }
             }
 
@@ -174,10 +212,34 @@ namespace System.Diagnostics
             {
                 uint length;
                 fixed (void** result = &value)
-                fixed (char* key = name)
                 {
-                    return s_query(buffer, key, result, &length) != 0;
+                    if (!UseAnsiVersionApi)
+                    {
+                        fixed (char* key = name)
+                        {
+                            return s_query(buffer, key, result, &length) != 0;
+                        }
+                    }
+
+                    byte* ansiKey = AnsiStringMarshaller.ConvertToUnmanaged(name);
+                    try
+                    {
+                        return s_query(buffer, ansiKey, result, &length) != 0;
+                    }
+                    finally
+                    {
+                        AnsiStringMarshaller.Free(ansiKey);
+                    }
                 }
+            }
+
+            internal static string GetAnsiLanguageName(uint languageId)
+            {
+                var getName = (delegate* unmanaged[Stdcall]<uint, byte*, uint, uint>)NativeLibrary.GetExport(s_library, "VerLanguageNameA");
+                const int MaxLength = 256;
+                byte* name = stackalloc byte[MaxLength];
+                uint length = getName(languageId, name, MaxLength);
+                return Marshal.PtrToStringAnsi((IntPtr)name, (int)length);
             }
         }
 

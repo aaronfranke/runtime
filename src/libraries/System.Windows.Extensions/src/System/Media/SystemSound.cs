@@ -30,6 +30,7 @@ namespace System.Media
         {
             // Pre-Vista loaders do not support restricted DLL search flags.
             // Keep the system module loaded while its entry point is cached.
+            // MessageBeep has no ANSI/Unicode split, including on Windows 95/98.
             private static readonly nint s_module = NativeLibrary.Load(Path.Combine(Environment.SystemDirectory, Interop.Libraries.User32));
             private static readonly delegate* unmanaged[Stdcall]<int, int> s_messageBeep =
                 (delegate* unmanaged[Stdcall]<int, int>)NativeLibrary.GetExport(s_module, "MessageBeep");

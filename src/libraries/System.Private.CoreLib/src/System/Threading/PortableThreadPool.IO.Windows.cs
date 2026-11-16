@@ -12,6 +12,8 @@ namespace System.Threading
     internal sealed partial class PortableThreadPool
     {
         private readonly nint[] _ioPorts = new nint[IOCompletionPortCount];
+        internal bool SupportsIOCompletionPorts => _ioPorts[0] != 0;
+
         private uint _ioPortSelectorForRegister = unchecked((uint)-1);
         private uint _ioPortSelectorForQueue = unchecked((uint)-1);
         private IOCompletionPoller[]? _ioCompletionPollers;
@@ -81,21 +83,22 @@ namespace System.Threading
             Debug.Assert(IOCompletionPollerCount % IOCompletionPortCount == 0);
             for (int i = 0; i < IOCompletionPortCount; i++)
             {
-                _ioPorts[i] = CreateIOCompletionPort(int.MaxValue);
-            }
-        }
+                nint port =
+                    Interop.Kernel32.CreateIoCompletionPort(new IntPtr(-1), IntPtr.Zero, UIntPtr.Zero, int.MaxValue);
+                if (port == 0)
+                {
+                    // Windows 9x has no completion ports. Keep worker threads and registered waits available.
+                    if (i == 0 && Marshal.GetLastPInvokeError() == Interop.Errors.ERROR_CALL_NOT_IMPLEMENTED)
+                    {
+                        return;
+                    }
 
-        private static nint CreateIOCompletionPort(int numConcurrentThreads)
-        {
-            nint port =
-                Interop.Kernel32.CreateIoCompletionPort(new IntPtr(-1), IntPtr.Zero, UIntPtr.Zero, numConcurrentThreads);
-            if (port == 0)
-            {
-                int hr = Marshal.GetHRForLastWin32Error();
-                Environment.FailFast($"Failed to create an IO completion port. HR: {hr}");
-            }
+                    int hr = Marshal.GetHRForLastWin32Error();
+                    Environment.FailFast($"Failed to create an IO completion port. HR: {hr}");
+                }
 
-            return port;
+                _ioPorts[i] = port;
+            }
         }
 
         public void RegisterForIOCompletionNotifications(nint handle)
@@ -152,6 +155,11 @@ namespace System.Threading
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void EnsureIOCompletionPollers()
         {
+            if (!SupportsIOCompletionPorts)
+            {
+                throw new PlatformNotSupportedException(SR.PlatformNotSupported_OverlappedIO);
+            }
+
             _threadAdjustmentLock.Acquire();
             try
             {

@@ -212,6 +212,11 @@ namespace System.Security.Principal
             if (!OperatingSystem.IsWindowsVersionAtLeast(5, 1))
             {
                 // NT 4 and Windows 2000 have LookupAccountNameW but lack LsaLookupNames2.
+                if (Environment.OSVersion.Platform == PlatformID.Win32Windows)
+                {
+                    throw new PlatformNotSupportedException(SR.PlatformNotSupported_Principal);
+                }
+
                 return TranslateToSidsLegacy(sourceAccounts, out someFailed);
             }
 

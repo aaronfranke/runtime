@@ -209,8 +209,48 @@ bool PalGetMaximumStackBounds(_Out_ void** ppStackLowOut, _Out_ void** ppStackHi
 //NOTE:  This implementation exists because calling GetModuleFileName is not wack compliant.  if we later decide
 //       that the framework package containing mrt100_app no longer needs to be wack compliant, this should be
 //       removed and the windows implementation of GetModuleFileName should be substitued on windows.
+#if defined(TARGET_X86)
+static int32_t PalGetWin9xExecutablePath(_Out_ const TCHAR** pModuleNameOut, HANDLE moduleBase)
+{
+    *pModuleNameOut = nullptr;
+    if (moduleBase != nullptr && moduleBase != GetModuleHandleA(nullptr))
+        return 0;
+
+    // The console profile uses the executable's path. Keep the buffer alive for
+    // the lifetime of the process, like the NT loader's module name.
+    static WCHAR path[MAX_PATH];
+    static LONG state;
+    static int32_t length;
+    if (InterlockedCompareExchange(&state, 1, 0) == 0)
+    {
+        char ansi[MAX_PATH];
+        DWORD bytes = GetModuleFileNameA(nullptr, ansi, sizeof(ansi));
+        if (bytes != 0 && bytes < sizeof(ansi))
+            length = MultiByteToWideChar(CP_ACP, 0, ansi, static_cast<int>(bytes), path, MAX_PATH - 1);
+
+        InterlockedExchange(&state, 2);
+    }
+    else
+    {
+        while (InterlockedCompareExchange(&state, 0, 0) != 2)
+            Sleep(0);
+    }
+
+    if (length != 0)
+        *pModuleNameOut = path;
+    return length;
+}
+#endif
+
 int32_t PalGetModuleFileName(_Out_ const TCHAR** pModuleNameOut, HANDLE moduleBase)
 {
+#if defined(TARGET_X86)
+    // Win9x sets the high bit of GetVersion and lacks the NT PEB layout.
+#pragma warning(suppress: 4996)
+    if ((GetVersion() & 0x80000000) != 0)
+        return PalGetWin9xExecutablePath(pModuleNameOut, moduleBase);
+#endif
+
     TEB* pTEB = NtCurrentTeb();
     LIST_ENTRY* pStartLink = &(pTEB->ProcessEnvironmentBlock->Ldr->InMemoryOrderModuleList);
     LIST_ENTRY* pCurLink = pStartLink->Flink;

@@ -24,6 +24,13 @@ namespace System.IO
                 return;
             }
 
+            if (Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                // Win9x only provides directory-wide signals without names or actions.
+                _enabled = false;
+                throw new PlatformNotSupportedException(SR.FileSystemWatcher_PlatformNotSupported);
+            }
+
             // If we're already running, don't do anything.
             if (!IsHandleClosed(_directoryHandle))
                 return;

@@ -1361,7 +1361,7 @@ namespace System.Diagnostics
                 }
                 else if (startInfo.RedirectStandardOutput)
                 {
-                    SafeFileHandle.CreateAnonymousPipe(out parentOutputPipeHandle, out childOutputHandle, asyncRead: OperatingSystem.IsWindows());
+                    CreateRedirectedOutputPipe(out parentOutputPipeHandle, out childOutputHandle);
                 }
 
                 if (startInfo.StandardErrorHandle is not null)
@@ -1370,7 +1370,7 @@ namespace System.Diagnostics
                 }
                 else if (startInfo.RedirectStandardError)
                 {
-                    SafeFileHandle.CreateAnonymousPipe(out parentErrorPipeHandle, out childErrorHandle, asyncRead: OperatingSystem.IsWindows());
+                    CreateRedirectedOutputPipe(out parentErrorPipeHandle, out childErrorHandle);
                 }
             }
             finally
@@ -1399,6 +1399,22 @@ namespace System.Diagnostics
                 childOutputHandle ??= Console.OpenStandardOutputHandle();
                 childErrorHandle ??= Console.OpenStandardErrorHandle();
             }
+        }
+
+        private static void CreateRedirectedOutputPipe(out SafeFileHandle readHandle, out SafeFileHandle writeHandle)
+        {
+#if TARGET_WINDOWS
+            try
+            {
+                SafeFileHandle.CreateAnonymousPipe(out readHandle, out writeHandle, asyncRead: true);
+                return;
+            }
+            catch (Win32Exception error) when (error.NativeErrorCode == Interop.Errors.ERROR_CALL_NOT_IMPLEMENTED)
+            {
+                // Windows 9x supports anonymous pipes but cannot create the named pipes used for overlapped I/O.
+            }
+#endif
+            SafeFileHandle.CreateAnonymousPipe(out readHandle, out writeHandle);
         }
 
         private static void CloseChildHandles(ProcessStartInfo startInfo, SafeFileHandle? childInputHandle, SafeFileHandle? childOutputHandle, SafeFileHandle? childErrorHandle)

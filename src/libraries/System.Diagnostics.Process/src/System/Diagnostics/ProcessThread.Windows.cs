@@ -157,6 +157,12 @@ namespace System.Diagnostics
         /// <summary>Gets timing information for the thread.</summary>
         private ProcessThreadTimes GetThreadTimes()
         {
+            if (Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                // The Win9x GetThreadTimes export is a stub, even with a valid handle.
+                throw new PlatformNotSupportedException(SR.ProcessThreadTimesNotSupported);
+            }
+
             using (SafeThreadHandle threadHandle = OpenThreadHandle(Interop.Kernel32.ThreadOptions.THREAD_QUERY_INFORMATION))
             {
                 var threadTimes = new ProcessThreadTimes();

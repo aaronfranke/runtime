@@ -628,6 +628,12 @@ namespace System.ServiceProcess
 
         private static SafeServiceHandle GetDataBaseHandleWithAccess(string machineName, int serviceControlManagerAccess)
         {
+            // Windows 95 and 98 only provide stubs for the NT Service Control Manager.
+            if (Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                throw new PlatformNotSupportedException(SR.PlatformNotSupported_ServiceControllerOnWin9x);
+            }
+
             var databaseHandle = new SafeServiceHandle();
             Marshal.InitHandle(databaseHandle, machineName.Equals(DefaultMachineName) || machineName.Length == 0 ?
                 Interop.Advapi32.OpenSCManager(null, null, serviceControlManagerAccess) :

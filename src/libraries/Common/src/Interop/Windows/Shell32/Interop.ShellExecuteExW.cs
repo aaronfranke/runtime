@@ -71,22 +71,77 @@ internal static partial class Interop
             }
 
             int lastError = 0;
+            Span<nint> ansiFields = stackalloc nint[5];
+            ansiFields.Clear();
             try
             {
-                if (!NativeLibrary.TryGetExport(shell, "ShellExecuteExW", out nint address))
+                // Windows 95 lacks ShellExecuteExW. The Windows 98 SE export is a stub.
+                bool ansi = Environment.OSVersion.Platform == PlatformID.Win32Windows;
+                if (!NativeLibrary.TryGetExport(shell, ansi ? "ShellExecuteExA" : "ShellExecuteExW", out nint address))
                 {
                     lastError = Errors.ERROR_CALL_NOT_IMPLEMENTED;
                     return false;
                 }
 
+                // SHELLEXECUTEINFOA and SHELLEXECUTEINFOW have the same pointer layout.
+                SHELLEXECUTEINFO native = *info;
+                if (ansi)
+                {
+                    ReadOnlySpan<nint> wideFields = [(nint)native.lpVerb, (nint)native.lpFile, (nint)native.lpParameters,
+                        (nint)native.lpDirectory, native.lpClass];
+                    for (int i = 0; i < wideFields.Length; i++)
+                    {
+                        if (wideFields[i] == 0)
+                        {
+                            continue;
+                        }
+
+                        char* text = (char*)wideFields[i];
+                        // Windows 95 rejects WC_NO_BEST_FIT_CHARS. A round trip checks for loss.
+                        int size = Kernel32.WideCharToMultiByte(Kernel32.CP_ACP, 0, text, -1, null, 0, null, null);
+                        if (size == 0)
+                        {
+                            lastError = Errors.ERROR_NO_UNICODE_TRANSLATION;
+                            return false;
+                        }
+
+                        ansiFields[i] = Marshal.AllocCoTaskMem(size);
+                        if (Kernel32.WideCharToMultiByte(Kernel32.CP_ACP, 0, text, -1, (byte*)ansiFields[i], size, null, null) != size ||
+                            !string.Equals(new string(text), Marshal.PtrToStringAnsi(ansiFields[i]), StringComparison.Ordinal))
+                        {
+                            lastError = Errors.ERROR_NO_UNICODE_TRANSLATION;
+                            return false;
+                        }
+                    }
+                    native.lpVerb = (char*)ansiFields[0];
+                    native.lpFile = (char*)ansiFields[1];
+                    native.lpParameters = (char*)ansiFields[2];
+                    native.lpDirectory = (char*)ansiFields[3];
+                    native.lpClass = ansiFields[4];
+                }
+
                 var shellExecute = (delegate* unmanaged[Stdcall]<SHELLEXECUTEINFO*, int>)address;
                 Marshal.SetLastSystemError(0);
-                bool result = shellExecute(info) != 0;
+                bool result = shellExecute(&native) != 0;
                 lastError = Marshal.GetLastSystemError();
+                info->hInstApp = native.hInstApp;
+                info->hProcess = native.hProcess;
                 return result;
+            }
+            catch (OutOfMemoryException)
+            {
+                lastError = Errors.ERROR_NOT_ENOUGH_MEMORY;
+                return false;
             }
             finally
             {
+                foreach (nint field in ansiFields)
+                {
+                    if (field != 0)
+                    {
+                        Marshal.FreeCoTaskMem(field);
+                    }
+                }
                 NativeLibrary.Free(shell);
                 Marshal.SetLastPInvokeError(lastError);
             }

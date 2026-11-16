@@ -4,7 +4,9 @@
 using System.Buffers;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.Win32.SafeHandles;
@@ -18,6 +20,10 @@ namespace System.Diagnostics
 {
     internal static partial class ProcessManager
     {
+        [FeatureSwitchDefinition("System.Diagnostics.Process.UseToolhelpSnapshot")]
+        internal static bool UseToolhelpSnapshot { get; } =
+            AppContext.TryGetSwitch("System.Diagnostics.Process.UseToolhelpSnapshot", out bool useToolhelp) && useToolhelp;
+
         internal static int ProcessQueryAccess { get; } = GetProcessQueryAccess();
 
         private static int GetProcessQueryAccess()
@@ -62,6 +68,12 @@ namespace System.Diagnostics
         /// <param name="processNameFilter">Optional process name to use as an inclusion filter.</param>
         internal static void GetProcessInfos(ref ArrayBuilder<ProcessInfo> builder, string? processNameFilter)
         {
+            if (UseToolhelpSnapshot && Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                builder = GetToolhelpProcessInfos(processNameFilter);
+                return;
+            }
+
             Dictionary<int, ProcessInfo> processInfos = NtProcessInfoHelper.GetProcessInfos(processNameFilter: processNameFilter);
             builder = new ArrayBuilder<ProcessInfo>(processInfos.Count);
             foreach (KeyValuePair<int, ProcessInfo> entry in processInfos)
@@ -152,6 +164,12 @@ namespace System.Diagnostics
             }
             else
             {
+                if (UseToolhelpSnapshot && Environment.OSVersion.Platform == PlatformID.Win32Windows)
+                {
+                    ArrayBuilder<ProcessInfo> snapshot = GetToolhelpProcessInfos(processIdFilter: processId);
+                    return snapshot.Count != 0 ? snapshot[0] : null;
+                }
+
                 // local case: do not use performance counter and also attempt to get the matching (by pid) process only
                 Dictionary<int, ProcessInfo> processInfos = NtProcessInfoHelper.GetProcessInfos(processId);
                 if (processInfos.TryGetValue(processId, out ProcessInfo? processInfo))
@@ -168,7 +186,7 @@ namespace System.Diagnostics
                 return processInfo.ProcessName;
             }
 
-            if (!isRemoteMachine && ProcessQueryAccess == ProcessOptions.PROCESS_QUERY_LIMITED_INFORMATION)
+            if (!isRemoteMachine && !UseToolhelpSnapshot && ProcessQueryAccess == ProcessOptions.PROCESS_QUERY_LIMITED_INFORMATION)
             {
                 string? processName = Interop.Kernel32.GetProcessName((uint)processId);
                 if (processName is not null)
@@ -210,7 +228,134 @@ namespace System.Diagnostics
         /// <summary>Gets the IDs of all processes on the current machine.</summary>
         public static int[] GetProcessIds()
         {
-            return NtProcessManager.GetProcessIds();
+            if (!UseToolhelpSnapshot)
+            {
+                return NtProcessManager.GetProcessIds();
+            }
+
+            ArrayBuilder<ProcessInfo> snapshot = GetToolhelpProcessInfos(includeThreads: false);
+            int[] ids = new int[snapshot.Count];
+            for (int i = 0; i < ids.Length; i++)
+            {
+                ids[i] = snapshot[i].ProcessId;
+            }
+            return ids;
+        }
+
+        private static unsafe ArrayBuilder<ProcessInfo> GetToolhelpProcessInfos(string? nameFilter = null, int? processIdFilter = null, bool includeThreads = true)
+        {
+            Interop.Kernel32.SnapshotFlags flags = Interop.Kernel32.SnapshotFlags.Process;
+            if (includeThreads)
+            {
+                flags |= Interop.Kernel32.SnapshotFlags.Thread;
+            }
+
+            nint snapshot = Interop.Kernel32.CreateToolhelp32Snapshot(flags, 0);
+            if (snapshot == -1)
+            {
+                throw new Win32Exception(Marshal.GetLastPInvokeError());
+            }
+
+            ArrayBuilder<ProcessInfo> processes = default;
+            try
+            {
+                Interop.Kernel32.PROCESSENTRY32 entry = default;
+                entry.dwSize = sizeof(Interop.Kernel32.PROCESSENTRY32);
+                bool more = Interop.Kernel32.Process32First(snapshot, &entry);
+                for (; more; more = Interop.Kernel32.Process32Next(snapshot, &entry))
+                {
+                    if (processIdFilter.HasValue && processIdFilter != entry.th32ProcessID)
+                    {
+                        continue;
+                    }
+
+                    ReadOnlySpan<char> image = entry.szExeFile;
+                    int end = image.IndexOf('\0');
+                    if (end >= 0)
+                    {
+                        image = image.Slice(0, end);
+                    }
+                    ReadOnlySpan<char> name = Path.GetFileNameWithoutExtension(image);
+                    if (nameFilter is not null && !name.Equals(nameFilter, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    processes.Add(new ProcessInfo
+                    {
+                        ProcessId = entry.th32ProcessID,
+                        ParentProcessId = entry.th32ParentProcessID,
+                        ProcessName = name.ToString(),
+                        BasePriority = entry.pcPriClassBase,
+                    });
+
+                    if (processIdFilter.HasValue)
+                    {
+                        break;
+                    }
+                }
+
+                if (!more)
+                {
+                    int error = Marshal.GetLastPInvokeError();
+                    if (error != Interop.Errors.ERROR_NO_MORE_FILES)
+                    {
+                        throw new Win32Exception(error);
+                    }
+                }
+
+                if (includeThreads && processes.Count != 0)
+                {
+                    PopulateToolhelpThreads(snapshot, processes);
+                }
+
+                return processes;
+            }
+            finally
+            {
+                Interop.Kernel32.CloseHandle(snapshot);
+            }
+        }
+
+        private static unsafe void PopulateToolhelpThreads(nint snapshot, ArrayBuilder<ProcessInfo> processes)
+        {
+            var byId = new Dictionary<int, ProcessInfo>(processes.Count);
+            for (int i = 0; i < processes.Count; i++)
+            {
+                ProcessInfo process = processes[i];
+                byId.Add(process.ProcessId, process);
+            }
+
+            Interop.Kernel32.THREADENTRY32 entry = default;
+            entry.dwSize = sizeof(Interop.Kernel32.THREADENTRY32);
+            // The trailing dwFlags member is unused. Require the snapshot fields through tpDeltaPri.
+            int minimumEntrySize = sizeof(Interop.Kernel32.THREADENTRY32) - sizeof(int);
+            for (bool more = Interop.Kernel32.Thread32First(snapshot, &entry); more;
+                more = Interop.Kernel32.Thread32Next(snapshot, &entry))
+            {
+                if (entry.dwSize >= minimumEntrySize && byId.TryGetValue(entry.th32OwnerProcessID, out ProcessInfo? owner))
+                {
+                    owner._threadInfoList.Add(new ThreadInfo
+                    {
+                        _threadId = entry.th32ThreadID,
+                        _processId = entry.th32OwnerProcessID,
+                        _basePriority = entry.tpBasePri,
+                        _currentPriority = entry.tpBasePri + entry.tpDeltaPri,
+                        // Win9x Tool Help supplies the ID and priorities, with no start address or scheduler state.
+                        _threadState = ThreadState.Unknown,
+                        _threadWaitReason = ThreadWaitReason.Unknown,
+                    });
+                }
+
+                // Win9x advances using the previous thread record. Preserve its ID.
+                entry.dwSize = sizeof(Interop.Kernel32.THREADENTRY32);
+            }
+
+            int error = Marshal.GetLastPInvokeError();
+            if (error != Interop.Errors.ERROR_NO_MORE_FILES)
+            {
+                throw new Win32Exception(error);
+            }
         }
 
         /// <summary>Gets an array of module infos for the specified process.</summary>
@@ -231,6 +376,12 @@ namespace System.Diagnostics
 
         static unsafe ProcessManager()
         {
+            // Win9x walks processes with Tool Help and does not use NT process tokens.
+            if (UseToolhelpSnapshot)
+            {
+                return;
+            }
+
             // In order to query information (OpenProcess) on some protected processes
             // like csrss, we need SeDebugPrivilege privilege.
             // After removing the dependency on Performance Counter, we don't have a chance
@@ -809,6 +960,11 @@ namespace System.Diagnostics
 
         private static unsafe ProcessModuleCollection GetModules(int processId, bool firstModuleOnly)
         {
+            if (ProcessManager.UseToolhelpSnapshot && Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                return GetToolhelpModules(processId, firstModuleOnly);
+            }
+
             // preserving Everett behavior.
             if (processId == SystemProcessID || processId == IdleProcessID)
             {
@@ -1025,6 +1181,7 @@ namespace System.Diagnostics
         private static uint MostRecentSize = DefaultCachedBufferSize;
 
         // Windows 2000 added both Tool Help on NT and six I/O counters before the thread array.
+        // Win9x uses a separate Tool Help parser and never reaches this helper.
         private static readonly bool s_usesNt4Layout =
             ProcessManager.ProcessQueryAccess == ProcessOptions.PROCESS_QUERY_INFORMATION &&
             !ProcessManager.HasKernel32Export("CreateToolhelp32Snapshot");

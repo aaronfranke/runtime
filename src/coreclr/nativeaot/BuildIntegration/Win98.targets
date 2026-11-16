@@ -1,0 +1,22 @@
+<!--
+  Licensed to the .NET Foundation under one or more agreements.
+  The .NET Foundation licenses this file to you under the MIT license.
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Win98Gcc Condition="'$(Win98Gcc)' == ''">i686-w64-mingw32-gcc.exe</Win98Gcc>
+    <Win98LldLink Condition="'$(Win98LldLink)' == ''">lld-link.exe</Win98LldLink>
+    <_Win9xGcc>$(Win98Gcc)</_Win9xGcc>
+    <_Win9xLldLink>$(Win98LldLink)</_Win9xLldLink>
+  </PropertyGroup>
+  <Import Project="$(MSBuildThisFileDirectory)Win9x.targets" />
+  <ItemGroup>
+    <!-- Native LDAP needs the optional Windows LDAP client. Win95 does not import it.
+         Win9x cannot lazily load this provider with the restricted System32 policy. -->
+    <DirectPInvokeList Include="$(MSBuildThisFileDirectory)Win98LdapAPIs.txt" />
+    <NativeLibrary Include="wldap32.lib" />
+    <!-- Native ODBC needs an installed ODBC 3 manager. Win95 does not import it. -->
+    <DirectPInvokeList Include="$(MSBuildThisFileDirectory)Win98OdbcAPIs.txt" />
+    <NativeLibrary Include="odbc32.lib" />
+  </ItemGroup>
+</Project>

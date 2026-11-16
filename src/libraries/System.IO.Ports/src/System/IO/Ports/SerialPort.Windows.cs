@@ -13,6 +13,12 @@ namespace System.IO.Ports
     {
         public static string[] GetPortNames()
         {
+            // The serial device map used below is an NT registry provider.
+            if (Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                throw new PlatformNotSupportedException(SR.PlatformNotSupported_SerialPort_GetPortNames);
+            }
+
             // Hitting the registry for this isn't the only way to get the ports.
             //
             // WMI: https://msdn.microsoft.com/en-us/library/aa394413.aspx

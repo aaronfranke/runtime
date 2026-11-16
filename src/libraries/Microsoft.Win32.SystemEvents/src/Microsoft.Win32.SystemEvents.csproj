@@ -123,6 +123,7 @@ Microsoft.Win32.SystemEvents</PackageDescription>
     <Compile Include="Microsoft\Win32\SessionSwitchEventHandler.cs" />
     <Compile Include="Microsoft\Win32\SessionSwitchReason.cs" />
     <Compile Include="Microsoft\Win32\SystemEvents.cs" />
+    <Compile Include="Microsoft\Win32\SystemEventsWindow.cs" />
     <Compile Include="Microsoft\Win32\SystemEventsSession.cs" />
     <Compile Include="Microsoft\Win32\TimerElapsedEventArgs.cs" />
     <Compile Include="Microsoft\Win32\TimerElapsedEventHandler.cs" />

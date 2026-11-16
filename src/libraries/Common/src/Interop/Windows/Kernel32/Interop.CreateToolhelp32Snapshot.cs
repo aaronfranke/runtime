@@ -47,6 +47,18 @@ internal static partial class Interop
 #endif
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct THREADENTRY32
+        {
+            internal int dwSize;
+            internal int cntUsage;
+            internal uint th32ThreadID;
+            internal int th32OwnerProcessID;
+            internal int tpBasePri;
+            internal int tpDeltaPri;
+            internal int dwFlags;
+        }
+
         // https://learn.microsoft.com/windows/desktop/api/tlhelp32/nf-tlhelp32-createtoolhelp32snapshot
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         [LibraryImport(Libraries.Kernel32, SetLastError = true)]
@@ -63,5 +75,15 @@ internal static partial class Interop
         [LibraryImport(Libraries.Kernel32, EntryPoint = "Process32NextW", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static unsafe partial bool Process32Next(nint hSnapshot, PROCESSENTRY32* lppe);
+
+        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+        [LibraryImport(Libraries.Kernel32, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static unsafe partial bool Thread32First(nint hSnapshot, THREADENTRY32* lpte);
+
+        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+        [LibraryImport(Libraries.Kernel32, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static unsafe partial bool Thread32Next(nint hSnapshot, THREADENTRY32* lpte);
     }
 }

@@ -4139,6 +4139,9 @@
   <data name="PlatformNotSupported_FileEncryption" xml:space="preserve">
     <value>File encryption is not supported on this platform.</value>
   </data>
+  <data name="PlatformNotSupported_FileHardLink" xml:space="preserve">
+    <value>This version of Windows does not support creating hard links.</value>
+  </data>
   <data name="PlatformNotSupported_FileReplace" xml:space="preserve">
     <value>The operating system does not support file replacement.</value>
   </data>

@@ -10,10 +10,10 @@ namespace System.Net.Http
     {
         private static unsafe HttpWindowsProxy ConstructLegacyWindowsProxy()
         {
-            // IE5 introduced per-connection settings. Use its ANSI API;
+            // IE5 introduced per-connection settings. Use ANSI for IE5 and Win9x;
             // querying only INTERNET_OPTION_PROXY would lose PAC/WPAD flags.
-            // This is an initialization snapshot: older NT lacks the
-            // thread-agnostic notifications used by this handler.
+            // This is an initialization snapshot: Win9x has no registry notifications,
+            // and older NT lacks the thread-agnostic notifications used by this handler.
             if (!NativeLibrary.TryLoad(Path.Combine(Environment.SystemDirectory, "wininet.dll"), out IntPtr library))
             {
                 throw new PlatformNotSupportedException("Reading system proxy settings requires WinINet with Internet Explorer 5 or later. Specify a proxy explicitly or disable proxying.");
@@ -54,7 +54,7 @@ namespace System.Net.Http
                     if ((flags & ~3u) != 0 || (flags & 3u) == 0)
                     {
                         // Do not silently replace configured PAC/WPAD with a direct connection.
-                        // These require a separate discovery/script engine on NT 4.
+                        // These require a separate discovery/script engine on NT4 and Win9x.
                         throw new PlatformNotSupportedException("Automatic proxy discovery and configuration scripts are not supported on legacy Windows. Specify a proxy explicitly or disable proxying.");
                     }
 

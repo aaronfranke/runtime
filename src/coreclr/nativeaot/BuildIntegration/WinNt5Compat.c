@@ -58,7 +58,7 @@ THUNK(DWORD, GetProcessId, 4, (HANDLE process))
         return native(process);
     }
 
-    /* NT 4 and Windows 2000 lack GetProcessId. */
+    /* NT 4 and Windows 2000 lack GetProcessId. Win9x has no ntdll equivalent. */
     typedef NTSTATUS (NTAPI *query_process_fn)(HANDLE, PROCESSINFOCLASS, void *, ULONG, ULONG *);
     typedef ULONG (NTAPI *status_error_fn)(NTSTATUS);
     HMODULE ntdll = GetModuleHandleA("ntdll.dll");
@@ -122,7 +122,7 @@ THUNK(LONG, BCryptGenRandom, 16, (void *algorithm, BYTE *bytes, ULONG length, UL
 #if !defined(_WIN64)
 /* NT 5.0/5.1 expose RtlEncryptMemory/RtlDecryptMemory with the same protection
    modes as the newer Crypt32 exports, but with an 8-byte block size.
-   NT 4 does not provide these native memory-protection functions. */
+   NT 4 and Win9x do not provide these native memory-protection functions. */
 static BOOL protect_memory(void *data, DWORD length, DWORD flags, BOOL encrypt)
 {
     if ((length & 15u) != 0) {

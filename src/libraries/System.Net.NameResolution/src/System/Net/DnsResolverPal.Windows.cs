@@ -28,7 +28,7 @@ namespace System.Net
             if (s_useLegacyDns && IPAddress.TryParse(name, out IPAddress? address))
             {
                 // Literal address records need no DNS configuration or provider, including on
-                // NT 4. These synthetic records have no cache lifetime.
+                // NT 4 and Win9x. These synthetic records have no cache lifetime.
                 cancellationToken.ThrowIfCancellationRequested();
                 return new DnsResult<AddressRecord>(DnsResponseCode.NoError,
                     address.AddressFamily == addressFamily ? [new AddressRecord(address, TimeSpan.Zero)] : null, TimeSpan.Zero);

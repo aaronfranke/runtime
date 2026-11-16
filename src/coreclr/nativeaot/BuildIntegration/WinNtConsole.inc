@@ -9,7 +9,9 @@ static FARPROC legacy_console_kernel_proc(const char *name)
 // Reuse the byte-stream renderer while retaining NT's native Unicode input.
 // Native virtual-terminal processing remains preferred where available.
 #define WIN_LEGACY_CONSOLE_KERNEL_PROC legacy_console_kernel_proc
+#define WIN_LEGACY_CONSOLE_FORCE FALSE
 #include "WinLegacyConsoleOutput.inc"
+#undef WIN_LEGACY_CONSOLE_FORCE
 #undef WIN_LEGACY_CONSOLE_KERNEL_PROC
 
 THUNK(BOOL, WriteFile, 20, (HANDLE file, const void *buffer, DWORD bytes, DWORD *written, OVERLAPPED *overlapped))

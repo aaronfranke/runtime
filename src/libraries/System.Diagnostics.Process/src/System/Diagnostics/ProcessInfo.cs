@@ -17,6 +17,9 @@ namespace System.Diagnostics
         internal int BasePriority { get; set; }
         internal string ProcessName { get; set; } = string.Empty;
         internal int ProcessId { get; set; }
+#if TARGET_WINDOWS
+        internal int? ParentProcessId { get; set; }
+#endif
         internal long PoolPagedBytes { get; set; }
         internal long PoolNonPagedBytes { get; set; }
         internal long VirtualBytes { get; set; }

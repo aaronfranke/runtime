@@ -108,6 +108,7 @@ namespace System.IO
             ArgumentNullException.ThrowIfNull(directoryInfo);
             ArgumentNullException.ThrowIfNull(directorySecurity);
 
+            ThrowIfFileSecurityUnsupported();
             FileSystem.CreateDirectory(directoryInfo.FullName, directorySecurity.GetSecurityDescriptorBinaryForm());
         }
 
@@ -273,6 +274,7 @@ namespace System.IO
 
             if (security != null)
             {
+                ThrowIfFileSecurityUnsupported();
                 fixed (byte* pSecurityDescriptor = security.GetSecurityDescriptorBinaryForm())
                 {
                     secAttrs.lpSecurityDescriptor = pSecurityDescriptor;
@@ -297,6 +299,15 @@ namespace System.IO
                     ValidateFileHandle(handle, fullPath);
                 }
                 return handle;
+            }
+        }
+
+        private static void ThrowIfFileSecurityUnsupported()
+        {
+            // Win9x cannot enforce a filesystem security descriptor at creation.
+            if (Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                throw new PlatformNotSupportedException(SR.PlatformNotSupported_AccessControl);
             }
         }
 

@@ -575,6 +575,12 @@ namespace System.IO.Ports
                 throw new ArgumentException(SR.Format(SR.Arg_InvalidSerialPort, portName), nameof(portName));
             }
 
+            // SerialStream always binds the port to an I/O completion port, which Win9x lacks.
+            if (Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                throw new PlatformNotSupportedException(SR.PlatformNotSupported_SerialPort_CompletionPort);
+            }
+
             // Error checking done in SerialPort.
 
             SafeFileHandle tempHandle = OpenPort(portNumber);

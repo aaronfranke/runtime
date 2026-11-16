@@ -57,7 +57,12 @@ bool PalInitComAndFlsSlot()
     HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
     if (FAILED(hr))
     {
-        return false;
+        // Windows 95 can lack MTA support. The runtime still needs its thread detach slot.
+#pragma warning(suppress: 4996)
+        if (hr != E_NOTIMPL || (GetVersion() & 0x8000ffffu) != 0x80000004u)
+        {
+            return false;
+        }
     }
 
     // We use fiber detach callbacks to run our thread shutdown code because the fiber detach

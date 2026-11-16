@@ -77,7 +77,8 @@ The legacy profiles translate the byte-stream console output sequences used by
 the tested line editor when native virtual-terminal processing is unavailable.
 NT profiles prefer native processing on newer Windows. This is a limited CSI
 renderer, with legacy colors mapped to the console palette, rather than a full
-terminal emulator. NT retains native Unicode console input.
+terminal emulator. NT retains native Unicode console input; 9x converts console
+input through its active code page.
 
 ## Legacy Windows NT profiles
 
@@ -103,6 +104,35 @@ the paths, use `WinNt4Gcc` and `WinNt4LldLink`, `WinNt5Gcc` and `WinNt5LldLink`,
 or `WinNt6Gcc` and `WinNt6LldLink`. The profiles link the Universal CRT
 statically. The compiler's CPU requirements and any OS requirements imposed by
 the application and its dependencies still apply.
+
+## Windows 95 and Windows 98 profiles
+
+Use the Native AOT compiler, libraries, and build integration from this branch.
+Publish a console `Exe` with `-r win-x86 -p:PublishAot=true` and select
+`-p:LegacyWindowsProfile=win_98` or `-p:LegacyWindowsProfile=win_95`. Both
+profiles use i686 MinGW GCC, LLD, the static UCRT, and the portable thread pool.
+Use `Win98Gcc` and `Win98LldLink` or `Win95Gcc` and `Win95LldLink` to supply
+explicit tool paths.
+
+Windows 95 requires LLVM MC and the integer-only
+[Berkeley SoftFloat 3e archive](https://www.jhauser.us/arithmetic/SoftFloat.html).
+With the i686 MinGW bin directory on `PATH`, run the following from the runtime
+repository root in PowerShell. Set the SoftFloat source path first.
+
+```powershell
+$softFloat = 'C:\src\SoftFloat-3e'
+$safeSehHeader = (Resolve-Path 'src/coreclr/nativeaot/BuildIntegration/Win95SoftFloatSafeSeh.h').Path.Replace('\', '/')
+$options = '-DSOFTFLOAT_ROUND_ODD -DINLINE_LEVEL=5 -DSOFTFLOAT_FAST_DIV32TO16 -march=i686 -mno-sse -mno-sse2 -ffreestanding -fno-stack-protector'
+make -B -C "$softFloat/build/Win32-SSE2-MinGW" DELETE=echo "SOFTFLOAT_OPTS=$options -include `"$safeSehHeader`""
+```
+
+Pass `-p:Win95SoftFloatRoot=C:\src\SoftFloat-3e` at publish time. Use
+`-p:Win95LlvmMc=<path>` if `llvm-mc.exe` is outside `PATH`.
+
+The Windows 95 entry point uses software XMM state because Windows 95 does
+not enable it for user-mode code. It covers the instruction forms exercised
+by the port. The compiler and other native instructions retain their CPU
+requirements.
 
 ## Visual Studio Solutions
 

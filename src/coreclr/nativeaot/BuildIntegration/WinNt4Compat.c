@@ -54,7 +54,7 @@ THUNK(DWORD, GetProcessId, 4, (HANDLE process))
         return native(process);
     }
 
-    /* NT 4 and Windows 2000 lack GetProcessId. */
+    /* NT 4 and Windows 2000 lack GetProcessId. Win9x has no ntdll equivalent. */
     typedef NTSTATUS (NTAPI *query_process_fn)(HANDLE, PROCESSINFOCLASS, void *, ULONG, ULONG *);
     typedef ULONG (NTAPI *status_error_fn)(NTSTATUS);
     HMODULE ntdll = GetModuleHandleA("ntdll.dll");
@@ -945,7 +945,7 @@ THUNK(BOOL, GetFileSizeEx, 8, (HANDLE file, LARGE_INTEGER *size))
         return native(file, size);
     }
 
-    /* NT 4 lacks GetFileSizeEx, including CRT imports from native libraries. */
+    /* NT 4 and Win9x lack GetFileSizeEx, including CRT imports from native libraries. */
     DWORD high;
     SetLastError(NO_ERROR);
     DWORD low = GetFileSize(file, &high);

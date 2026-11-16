@@ -30,6 +30,10 @@ namespace System.Runtime.InteropServices
         // The actual integer handle value that the EE uses internally.
         private IntPtr _handle;
 
+        [FeatureSwitchDefinition("System.Runtime.InteropServices.UseExplicitGCHandleChecks")]
+        private static bool UseExplicitGCHandleChecks { get; } =
+            AppContextConfigHelper.GetBooleanConfig("System.Runtime.InteropServices.UseExplicitGCHandleChecks", defaultValue: false);
+
         // Allocate a handle storing the object and the type.
         private GCHandle(object? value, GCHandleType type)
         {
@@ -209,6 +213,16 @@ namespace System.Runtime.InteropServices
                 throw new NullReferenceException();
             }
 #else
+            if (UseExplicitGCHandleChecks)
+            {
+                // Win9x does not report the fault address needed to classify a null read.
+                if (handle == 0)
+                {
+                    throw new NullReferenceException();
+                }
+                return;
+            }
+
             // The read will be combined with the read in InternalGet under Release.
             _ = *(object*)handle;
 #endif

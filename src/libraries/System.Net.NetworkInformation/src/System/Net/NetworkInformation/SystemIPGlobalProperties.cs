@@ -21,9 +21,9 @@ namespace System.Net.NetworkInformation
         {
             get
             {
-                if (!OperatingSystem.IsWindowsVersionAtLeast(5))
+                if (!OperatingSystem.IsWindowsVersionAtLeast(4, 10))
                 {
-                    // NT 4 lacks a working GetNetworkParams.
+                    // NT 4 and Windows 95 lack a working GetNetworkParams.
                     return Dns.GetHostName();
                 }
 
@@ -119,7 +119,7 @@ namespace System.Net.NetworkInformation
             int tableClass, string basicExport, string extendedExport)
         {
             const uint ERROR_NOT_SUPPORTED = 50;
-            // NT 4/5 cannot use the restricted DLL search flag. IP Helper can be absent on NT 4.
+            // NT 5 and Win9x cannot use the restricted DLL search flag. Windows 95 can lack IP Helper entirely.
             if (!NativeLibrary.TryLoad(Path.Combine(Environment.SystemDirectory, Interop.Libraries.IpHlpApi), out nint module))
             {
                 return ERROR_NOT_SUPPORTED;

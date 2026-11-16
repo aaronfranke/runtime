@@ -315,9 +315,17 @@ namespace System.Threading
                 if (hr == HResults.RPC_E_CHANGED_MODE)
                     return;
 
-                // CoInitializeEx returns E_NOTIMPL on Windows Nano Server for STA
                 if (hr == HResults.E_NOTIMPL)
+                {
+                    // An ordinary thread can run without COM when Windows 95 provides no MTA.
+                    if (state == ApartmentState.Unknown)
+                    {
+                        return;
+                    }
+
+                    // An explicitly requested apartment must be supported by the OS.
                     throw new PlatformNotSupportedException();
+                }
 
                 throw new OutOfMemoryException();
             }

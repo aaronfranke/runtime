@@ -44,6 +44,8 @@ namespace System.Threading
                 eventFlags |= Interop.Kernel32.CREATE_EVENT_MANUAL_RESET;
             }
 
+            ThreadingAclExtensions.ThrowIfWin9xSecurityUnsupported();
+
             fixed (byte* pSecurityDescriptor = eventSecurity.GetSecurityDescriptorBinaryForm())
             {
                 Interop.Kernel32.SECURITY_ATTRIBUTES secAttrs = Interop.Kernel32.SECURITY_ATTRIBUTES.Create(pSecurityDescriptor);
@@ -130,6 +132,8 @@ namespace System.Threading
             }
 
             result = null;
+            ThreadingAclExtensions.ThrowIfWin9xSecurityUnsupported();
+
             SafeWaitHandle existingHandle = Interop.Kernel32.OpenEvent((uint)rights, false, name);
 
             int errorCode = Marshal.GetLastPInvokeError();

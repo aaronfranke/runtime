@@ -17,10 +17,13 @@ internal static partial class Interop
             // module loaded for the lifetime of these cached entry points.
             private static readonly nint s_module = NativeLibrary.Load(Path.Combine(Environment.SystemDirectory, Libraries.WinMM));
 
+            // Windows 95 and 98 require the ANSI path entry points. Memory-backed
+            // PlaySound passes the same binary WAVE data to either export.
+            private static readonly bool s_useAnsi = Environment.OSVersion.Platform == PlatformID.Win32Windows;
             private static readonly delegate* unmanaged[Stdcall]<nint, nint, int, int> s_play =
-                (delegate* unmanaged[Stdcall]<nint, nint, int, int>)NativeLibrary.GetExport(s_module, "PlaySoundW");
+                (delegate* unmanaged[Stdcall]<nint, nint, int, int>)NativeLibrary.GetExport(s_module, s_useAnsi ? "PlaySoundA" : "PlaySoundW");
             private static readonly delegate* unmanaged[Stdcall]<nint, nint, int, nint> s_open =
-                (delegate* unmanaged[Stdcall]<nint, nint, int, nint>)NativeLibrary.GetExport(s_module, "mmioOpenW");
+                (delegate* unmanaged[Stdcall]<nint, nint, int, nint>)NativeLibrary.GetExport(s_module, s_useAnsi ? "mmioOpenA" : "mmioOpenW");
             private static readonly delegate* unmanaged[Stdcall]<nint, MMCKINFO*, MMCKINFO*, int, int> s_descend =
                 (delegate* unmanaged[Stdcall]<nint, MMCKINFO*, MMCKINFO*, int, int>)NativeLibrary.GetExport(s_module, "mmioDescend");
             private static readonly delegate* unmanaged[Stdcall]<nint, byte*, int, int> s_read =
@@ -154,7 +157,23 @@ internal static partial class Interop
 
             internal static int Close(nint handle, int flags) => s_close(handle, flags);
 
-            private static nint AllocatePath(string path) => Marshal.StringToHGlobalUni(path);
+            private static nint AllocatePath(string path)
+            {
+                if (!s_useAnsi)
+                {
+                    return Marshal.StringToHGlobalUni(path);
+                }
+
+                nint encoded = Marshal.StringToHGlobalAnsi(path);
+                if (string.Equals(path, Marshal.PtrToStringAnsi(encoded), StringComparison.Ordinal))
+                {
+                    return encoded;
+                }
+
+                // Avoid opening a different file after an ANSI replacement or best fit.
+                Marshal.FreeHGlobal(encoded);
+                return 0;
+            }
         }
     }
 }

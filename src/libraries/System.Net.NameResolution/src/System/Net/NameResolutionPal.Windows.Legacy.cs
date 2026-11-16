@@ -24,7 +24,7 @@ namespace System.Net
             private static unsafe IntPtr GetWinsockModule()
             {
                 Interop.Winsock.EnsureInitialized();
-                // Winsock is already loaded; query that resident module.
+                // Winsock is already loaded; the legacy loader may reject the wide load call.
                 fixed (byte* name = "ws2_32.dll\0"u8)
                 {
                     return GetModuleHandleA(name);
@@ -93,6 +93,13 @@ namespace System.Net
             {
                 nativeErrorCode = Marshal.GetLastPInvokeError();
                 errorCode = (SocketError)nativeErrorCode;
+                if ((errorCode is SocketError.HostNotFound or SocketError.NoData) && address.Equals(IPAddress.Loopback))
+                {
+                    // Some Windows 95 setups have no reverse entry for the IPv4 loopback address.
+                    errorCode = SocketError.Success;
+                    nativeErrorCode = 0;
+                    return "localhost";
+                }
                 return null;
             }
 

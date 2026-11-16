@@ -145,9 +145,16 @@ namespace System.IO.Pipes
 
                 if (handle.IsInvalid)
                 {
-                    Exception e = Win32Marshal.GetExceptionForLastWin32Error();
+                    int errorCode = Marshal.GetLastPInvokeError();
                     handle.Dispose();
-                    throw e;
+
+                    // Win9x exports CreateNamedPipeW but has no local named pipe server implementation.
+                    if (errorCode == Interop.Errors.ERROR_CALL_NOT_IMPLEMENTED)
+                    {
+                        throw new PlatformNotSupportedException(SR.PlatformNotSupported_NamedPipeServer);
+                    }
+
+                    throw Win32Marshal.GetExceptionForWin32Error(errorCode);
                 }
 
                 InitializeHandle(handle, false, (options & PipeOptions.Asynchronous) != 0);

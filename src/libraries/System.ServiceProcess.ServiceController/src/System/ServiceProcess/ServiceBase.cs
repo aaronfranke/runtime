@@ -582,6 +582,12 @@ namespace System.ServiceProcess
             if (services == null || services.Length == 0)
                 throw new ArgumentException(SR.NoServices);
 
+            // The Service Control Manager exports on Windows 95 and 98 are stubs.
+            if (Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                throw new PlatformNotSupportedException(SR.PlatformNotSupported_ServiceControllerOnWin9x);
+            }
+
             IntPtr entriesPointer = Marshal.AllocHGlobal(checked((services.Length + 1) * sizeof(SERVICE_TABLE_ENTRY)));
             Span<SERVICE_TABLE_ENTRY> entries = new Span<SERVICE_TABLE_ENTRY>((void*)entriesPointer, services.Length + 1);
             entries.Clear();

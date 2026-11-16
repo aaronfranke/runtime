@@ -14,7 +14,7 @@ namespace System.Net.NetworkInformation
 
         private static bool GetLegacyNetworkAvailability()
         {
-            // NT 4 IP Helper can report every interface as unreachable.
+            // NT 4 and Win9x IP Helper can report every interface as unreachable.
             // On NT 5 the IP Helper table reports usable operational states.
             if (OperatingSystem.IsWindowsVersionAtLeast(5) && ReadLegacyIpHelperTable<LegacyInterfaceRow>("GetIfTable") is { } interfaces)
             {

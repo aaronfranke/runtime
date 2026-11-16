@@ -61,7 +61,7 @@ namespace Microsoft.Win32.SafeHandles
         /// </summary>
         /// <param name="processId">The process ID of the process to open.</param>
         /// <returns>A <see cref="SafeProcessHandle"/> that represents the opened process.</returns>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="processId"/> is negative or zero.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="processId"/> is zero, or negative on systems other than Win9x.</exception>
         /// <exception cref="Win32Exception">Thrown when the process could not be opened.</exception>
         /// <exception cref="UnauthorizedAccessException">Thrown when the process exists but the caller does not have permissions to open it.</exception>
         /// <remarks>
@@ -101,7 +101,7 @@ namespace Microsoft.Win32.SafeHandles
         /// <param name="processId">The process ID of the process to open.</param>
         /// <param name="processHandle">When this method returns <see langword="true"/>, contains the <see cref="SafeProcessHandle"/> for the opened process; otherwise, <see langword="null"/>.</param>
         /// <returns><see langword="true"/> if the process was successfully opened; otherwise, <see langword="false"/>.</returns>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="processId"/> is negative or zero.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="processId"/> is zero, or negative on systems other than Win9x.</exception>
         /// <exception cref="UnauthorizedAccessException">Thrown when the process exists but the caller does not have permissions to open it.</exception>
         /// <remarks>
         /// <para>
@@ -130,7 +130,17 @@ namespace Microsoft.Win32.SafeHandles
 
         private static void ValidateOpenArguments(int processId)
         {
-            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(processId, 0);
+#if TARGET_WINDOWS
+            if (Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                // Win9x process IDs can have the high bit set, appearing negative as Int32.
+                ArgumentOutOfRangeException.ThrowIfZero(processId);
+            }
+            else
+#endif
+            {
+                ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(processId, 0);
+            }
 
             if (!ProcessUtils.PlatformSupportsProcessStartAndKill)
             {

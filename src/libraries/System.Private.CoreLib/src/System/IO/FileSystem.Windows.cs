@@ -96,7 +96,7 @@ namespace System.IO
             }
             catch (EntryPointNotFoundException e)
             {
-                // NT 4 lacks ReplaceFileW. Moving a file cannot preserve the
+                // NT 4 and Windows 9x lack ReplaceFileW. Moving a file cannot preserve the
                 // destination's metadata and provide the same backup and failure behavior.
                 throw new PlatformNotSupportedException(SR.PlatformNotSupported_FileReplace, e);
             }
@@ -548,6 +548,12 @@ namespace System.IO
 
         internal static void CreateHardLink(string path, string pathToTarget)
         {
+            // Win9x lacks both CreateHardLinkW and the NTFS operation used by the NT 4 fallback.
+            if (Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                throw new PlatformNotSupportedException(SR.PlatformNotSupported_FileHardLink);
+            }
+
             Interop.Kernel32.CreateHardLink(path, pathToTarget);
         }
 

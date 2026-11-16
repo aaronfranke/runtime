@@ -60,18 +60,20 @@ THUNK(BOOL, SetConsoleMode, 8, (HANDLE handle, DWORD mode))
     }
 
     lock_terminal();
-    BOOL native_result = native(handle, mode);
-    DWORD native_error = GetLastError();
-    // Keep native VT on modern Windows. Older NT consoles reject its flag.
-    if (native_result || native_error != ERROR_INVALID_PARAMETER || (mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) == 0) {
-        if (native_result && terminal.handle == handle) {
-            terminal.handle = NULL;
-            terminal.modes = 0;
-            terminal.input = TERMINAL_TEXT;
+    if (!WIN_LEGACY_CONSOLE_FORCE) {
+        BOOL result = native(handle, mode);
+        DWORD error = GetLastError();
+        // Keep native VT on modern Windows. Older NT consoles reject its flag.
+        if (result || error != ERROR_INVALID_PARAMETER || (mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) == 0) {
+            if (result && terminal.handle == handle) {
+                terminal.handle = NULL;
+                terminal.modes = 0;
+                terminal.input = TERMINAL_TEXT;
+            }
+            unlock_terminal();
+            SetLastError(error);
+            return result;
         }
-        unlock_terminal();
-        SetLastError(native_error);
-        return native_result;
     }
 
     CONSOLE_SCREEN_BUFFER_INFO screen;
@@ -177,6 +179,118 @@ static BOOL apply_attributes(HANDLE handle, WORD attributes)
         }
     }
     return SetConsoleTextAttribute(handle, attributes);
+}
+
+/* Windows 95 and 98 only implement the ANSI forms of these console APIs. */
+THUNK(BOOL, FillConsoleOutputCharacterW, 20, (HANDLE handle, wchar_t character, DWORD length, COORD start, DWORD *written))
+{
+    if (!WIN_LEGACY_CONSOLE_FORCE) {
+        typedef BOOL (WINAPI *fill_character_fn)(HANDLE, wchar_t, DWORD, COORD, DWORD *);
+        fill_character_fn native = (fill_character_fn)WIN_LEGACY_CONSOLE_KERNEL_PROC("FillConsoleOutputCharacterW");
+        return native(handle, character, length, start, written);
+    }
+
+    UINT code_page = GetConsoleOutputCP();
+    char encoded;
+    BOOL replaced = FALSE;
+    BOOL *used_default = code_page == CP_UTF7 || code_page == CP_UTF8 ? NULL : &replaced;
+    int count = WideCharToMultiByte(code_page, 0, &character, 1, &encoded, 1, NULL, used_default);
+    if (count == 0 || replaced) {
+        if (replaced || GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+            SetLastError(ERROR_NO_UNICODE_TRANSLATION);
+        }
+        return FALSE;
+    }
+    return FillConsoleOutputCharacterA(handle, encoded, length, start, written);
+}
+
+THUNK(BOOL, SetConsoleTitleW, 4, (const wchar_t *title))
+{
+    if (!WIN_LEGACY_CONSOLE_FORCE) {
+        typedef BOOL (WINAPI *set_title_fn)(const wchar_t *);
+        set_title_fn native = (set_title_fn)WIN_LEGACY_CONSOLE_KERNEL_PROC("SetConsoleTitleW");
+        return native(title);
+    }
+
+    UINT code_page = GetConsoleOutputCP();
+    int length = WideCharToMultiByte(code_page, 0, title, -1, NULL, 0, NULL, NULL);
+    if (length == 0) {
+        return FALSE;
+    }
+
+    char local[MAX_PATH];
+    HANDLE heap = GetProcessHeap();
+    char *ansi = length <= (int)sizeof(local) ? local : HeapAlloc(heap, 0, (SIZE_T)length);
+    if (ansi == NULL) {
+        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+        return FALSE;
+    }
+
+    BOOL replaced = FALSE;
+    BOOL *used_default = code_page == CP_UTF7 || code_page == CP_UTF8 ? NULL : &replaced;
+    BOOL result = FALSE;
+    if (WideCharToMultiByte(code_page, 0, title, -1, ansi, length, NULL, used_default) != 0) {
+        if (replaced) {
+            SetLastError(ERROR_NO_UNICODE_TRANSLATION);
+        } else {
+            result = SetConsoleTitleA(ansi);
+        }
+    }
+    DWORD error = GetLastError();
+    if (ansi != local) {
+        HeapFree(heap, 0, ansi);
+    }
+    SetLastError(error);
+    return result;
+}
+
+THUNK(DWORD, GetConsoleTitleW, 8, (wchar_t *title, DWORD capacity))
+{
+    if (!WIN_LEGACY_CONSOLE_FORCE) {
+        typedef DWORD (WINAPI *get_title_fn)(wchar_t *, DWORD);
+        get_title_fn native = (get_title_fn)WIN_LEGACY_CONSOLE_KERNEL_PROC("GetConsoleTitleW");
+        return native(title, capacity);
+    }
+
+    if (title == NULL || capacity == 0 || capacity > INT_MAX) {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return 0;
+    }
+
+    /* Leave room for DBCS titles up to the 64 KiB limit of the native API. */
+    DWORD ansi_capacity = capacity <= 32768 ? capacity * 2 : 65536;
+    char local[MAX_PATH * 2];
+    HANDLE heap = GetProcessHeap();
+    char *ansi = ansi_capacity <= sizeof(local) ? local : HeapAlloc(heap, 0, ansi_capacity);
+    if (ansi == NULL) {
+        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+        return 0;
+    }
+
+    SetLastError(ERROR_SUCCESS);
+    DWORD length = GetConsoleTitleA(ansi, ansi_capacity);
+    DWORD error = GetLastError();
+    int written = 0;
+    if (length >= ansi_capacity || (length == ansi_capacity - 1 && ansi_capacity < 65536)) {
+        error = ERROR_INSUFFICIENT_BUFFER;
+    } else if (length != 0) {
+        written = MultiByteToWideChar(GetConsoleOutputCP(), 0, ansi, (int)length, title, (int)capacity);
+        if (written == 0) {
+            error = GetLastError();
+        } else if ((DWORD)written == capacity) {
+            written = 0;
+            error = ERROR_INSUFFICIENT_BUFFER;
+        }
+    }
+    if (written != 0 || error == ERROR_SUCCESS) {
+        title[written] = 0;
+    }
+
+    if (ansi != local) {
+        HeapFree(heap, 0, ansi);
+    }
+    SetLastError(error);
+    return written;
 }
 
 static BOOL clear_cells(HANDLE handle, COORD start, DWORD cells, WORD attributes)

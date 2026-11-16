@@ -93,7 +93,7 @@ namespace System.Security.AccessControl
 
         public static bool IsSddlConversionSupported()
         {
-            // NT 4 lacks the native SDDL conversion routines.
+            // NT 4 and Win9x lack the native SDDL conversion routines.
             return OperatingSystem.IsWindowsVersionAtLeast(5);
         }
 

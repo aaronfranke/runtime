@@ -29,6 +29,8 @@ namespace System.Threading
 
             uint mutexFlags = initiallyOwned ? Interop.Kernel32.CREATE_MUTEX_INITIAL_OWNER : 0;
 
+            ThreadingAclExtensions.ThrowIfWin9xSecurityUnsupported();
+
             fixed (byte* pSecurityDescriptor = mutexSecurity.GetSecurityDescriptorBinaryForm())
             {
                 Interop.Kernel32.SECURITY_ATTRIBUTES secAttrs = Interop.Kernel32.SECURITY_ATTRIBUTES.Create(pSecurityDescriptor);
@@ -121,6 +123,8 @@ namespace System.Threading
             }
 
             result = null;
+            ThreadingAclExtensions.ThrowIfWin9xSecurityUnsupported();
+
             SafeWaitHandle existingHandle = Interop.Kernel32.OpenMutex((uint)rights, false, name);
 
             int errorCode = Marshal.GetLastPInvokeError();
