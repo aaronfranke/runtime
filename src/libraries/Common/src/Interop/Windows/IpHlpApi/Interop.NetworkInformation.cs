@@ -3,6 +3,7 @@
 
 using System;
 using System.Buffers.Binary;
+using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -531,25 +532,116 @@ internal static partial class Interop
         [LibraryImport(Interop.Libraries.IpHlpApi)]
         internal static partial uint GetIfEntry2(ref MibIfRow2 pIfRow);
 
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        [LibraryImport(Interop.Libraries.IpHlpApi)]
-        internal static unsafe partial uint GetIpStatisticsEx(MibIpStats* statistics, AddressFamily family);
+        internal static unsafe uint GetIpStatisticsEx(MibIpStats* statistics, AddressFamily family)
+        {
+            if (OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                return GetIpStatisticsExWindows(statistics, family);
+            }
+
+            return family == AddressFamily.InterNetwork
+                ? GetLegacyProtocolStatistics(statistics, "GetIpStatistics")
+                : GetLegacyProtocolStatistics(statistics, "GetIpStatisticsEx", family);
+        }
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        [LibraryImport(Interop.Libraries.IpHlpApi)]
-        internal static unsafe partial uint GetTcpStatisticsEx(MibTcpStats* statistics, AddressFamily family);
+        [LibraryImport(Interop.Libraries.IpHlpApi, EntryPoint = "GetIpStatisticsEx")]
+        private static unsafe partial uint GetIpStatisticsExWindows(MibIpStats* statistics, AddressFamily family);
+
+        internal static unsafe uint GetTcpStatisticsEx(MibTcpStats* statistics, AddressFamily family)
+        {
+            if (OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                return GetTcpStatisticsExWindows(statistics, family);
+            }
+
+            return family == AddressFamily.InterNetwork
+                ? GetLegacyProtocolStatistics(statistics, "GetTcpStatistics")
+                : GetLegacyProtocolStatistics(statistics, "GetTcpStatisticsEx", family);
+        }
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        [LibraryImport(Interop.Libraries.IpHlpApi)]
-        internal static unsafe partial uint GetUdpStatisticsEx(MibUdpStats* statistics, AddressFamily family);
+        [LibraryImport(Interop.Libraries.IpHlpApi, EntryPoint = "GetTcpStatisticsEx")]
+        private static unsafe partial uint GetTcpStatisticsExWindows(MibTcpStats* statistics, AddressFamily family);
+
+        internal static unsafe uint GetUdpStatisticsEx(MibUdpStats* statistics, AddressFamily family)
+        {
+            if (OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                return GetUdpStatisticsExWindows(statistics, family);
+            }
+
+            return family == AddressFamily.InterNetwork
+                ? GetLegacyProtocolStatistics(statistics, "GetUdpStatistics")
+                : GetLegacyProtocolStatistics(statistics, "GetUdpStatisticsEx", family);
+        }
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        [LibraryImport(Interop.Libraries.IpHlpApi)]
-        internal static unsafe partial uint GetIcmpStatistics(MibIcmpInfo* statistics);
+        [LibraryImport(Interop.Libraries.IpHlpApi, EntryPoint = "GetUdpStatisticsEx")]
+        private static unsafe partial uint GetUdpStatisticsExWindows(MibUdpStats* statistics, AddressFamily family);
+
+        internal static unsafe uint GetIcmpStatistics(MibIcmpInfo* statistics)
+        {
+            if (OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                return GetIcmpStatisticsWindows(statistics);
+            }
+
+            return GetLegacyProtocolStatistics(statistics, "GetIcmpStatistics");
+        }
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        [LibraryImport(Interop.Libraries.IpHlpApi)]
-        internal static partial uint GetIcmpStatisticsEx(out MibIcmpInfoEx statistics, AddressFamily family);
+        [LibraryImport(Interop.Libraries.IpHlpApi, EntryPoint = "GetIcmpStatistics")]
+        private static unsafe partial uint GetIcmpStatisticsWindows(MibIcmpInfo* statistics);
+
+        internal static unsafe uint GetIcmpStatisticsEx(out MibIcmpInfoEx statistics, AddressFamily family)
+        {
+            if (OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                return GetIcmpStatisticsExWindows(out statistics, family);
+            }
+
+            statistics = default;
+            fixed (MibIcmpInfoEx* pStats = &statistics)
+            {
+                return GetLegacyProtocolStatistics(pStats, "GetIcmpStatisticsEx", family);
+            }
+        }
+
+        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+        [LibraryImport(Interop.Libraries.IpHlpApi, EntryPoint = "GetIcmpStatisticsEx")]
+        private static partial uint GetIcmpStatisticsExWindows(out MibIcmpInfoEx statistics, AddressFamily family);
+
+        private static unsafe uint GetLegacyProtocolStatistics(void* statistics, string exportName, AddressFamily? family = null)
+        {
+            // Older Windows needs the system DLL's absolute path. The basic IPv4 exports predate the Ex APIs.
+            const uint ERROR_NOT_SUPPORTED = 50;
+            if (!NativeLibrary.TryLoad(Path.Combine(Environment.SystemDirectory, Libraries.IpHlpApi), out nint module))
+            {
+                return ERROR_NOT_SUPPORTED;
+            }
+
+            try
+            {
+                if (!NativeLibrary.TryGetExport(module, exportName, out nint export))
+                {
+                    return ERROR_NOT_SUPPORTED;
+                }
+
+                if (family.HasValue)
+                {
+                    var getStatisticsEx = (delegate* unmanaged[Stdcall]<void*, uint, uint>)export;
+                    return getStatisticsEx(statistics, (uint)family.Value);
+                }
+
+                var getStatistics = (delegate* unmanaged[Stdcall]<void*, uint>)export;
+                return getStatistics(statistics);
+            }
+            finally
+            {
+                NativeLibrary.Free(module);
+            }
+        }
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         [LibraryImport(Interop.Libraries.IpHlpApi)]

@@ -532,6 +532,13 @@ namespace System
 
         private static void GetUserName(ref ValueStringBuilder builder)
         {
+            // NT 4 predates the SAM-compatible Secur32 name query.
+            if (!OperatingSystem.IsWindowsVersionAtLeast(5))
+            {
+                GetLegacyUserName(ref builder);
+                return;
+            }
+
             uint size = 0;
             while (Interop.Secur32.GetUserNameExW(Interop.Secur32.NameSamCompatible, ref builder.GetPinnableReference(), ref size) == Interop.BOOLEAN.FALSE)
             {
@@ -547,6 +554,24 @@ namespace System
             }
 
             builder.Length = (int)size;
+        }
+
+        private static void GetLegacyUserName(ref ValueStringBuilder builder)
+        {
+            uint size = (uint)builder.Capacity;
+            while (Interop.Advapi32.GetUserNameW(ref builder.GetPinnableReference(), ref size) == 0)
+            {
+                if (Marshal.GetLastPInvokeError() != Interop.Errors.ERROR_INSUFFICIENT_BUFFER)
+                {
+                    builder.Length = 0;
+                    return;
+                }
+
+                builder.EnsureCapacity(checked((int)size));
+            }
+
+            // GetUserNameW includes the terminator in the returned size.
+            builder.Length = checked((int)size - 1);
         }
 
         public static unsafe string UserDomainName
@@ -773,10 +798,24 @@ namespace System
                     throw new ArgumentOutOfRangeException(nameof(folder), folder, SR.Format(SR.Arg_EnumIllegalVal, folder));
             }
 
-            Guid folderId = new Guid(folderGuid);
-            int hr = Interop.Shell32.SHGetKnownFolderPath(folderId, (uint)option, IntPtr.Zero, out string path);
-            if (hr == 0)
-                return path;
+            if (OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                Guid folderId = new Guid(folderGuid);
+                if (Interop.Shell32.SHGetKnownFolderPath(folderId, (uint)option, IntPtr.Zero, out string path) == 0)
+                {
+                    return path;
+                }
+            }
+            else
+            {
+                // The shell's legacy CSIDL for Desktop is virtual. Query its filesystem counterpart.
+                SpecialFolder legacyFolder = folder == SpecialFolder.Desktop ? SpecialFolder.DesktopDirectory : folder;
+                string? path = Interop.Shell32.GetLegacyFolderPath((int)legacyFolder, (int)option);
+                if (path != null)
+                {
+                    return path;
+                }
+            }
 
             // Fallback logic if SHGetKnownFolderPath failed (nanoserver)
             return fallbackEnv != null ? Environment.GetEnvironmentVariable(fallbackEnv) ?? string.Empty : string.Empty;

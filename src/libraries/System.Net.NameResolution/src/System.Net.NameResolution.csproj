@@ -43,14 +43,14 @@
 
   <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'windows'">
     <Compile Include="System\Net\NameResolutionPal.Windows.cs" />
+    <Compile Include="System\Net\NameResolutionPal.Windows.Legacy.cs" />
     <Compile Include="System\Net\DnsResolverPal.Windows.cs" />
+    <Compile Include="System\Net\DnsResolverPal.Windows.Legacy.cs" />
     <!-- Dnsapi interop -->
     <Compile Include="$(CommonPath)Interop\Windows\Dnsapi\Interop.DnsApi.cs"
              Link="Common\Interop\Windows\Dnsapi\Interop.DnsApi.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Dnsapi\Interop.DnsTypes.cs"
              Link="Common\Interop\Windows\Dnsapi\Interop.DnsTypes.cs" />
-    <Compile Include="$(CommonPath)System\NullableBool.cs"
-             Link="Common\System\NullableBool.cs" />
     <!-- Debug only -->
     <Compile Include="$(CommonPath)System\Net\DebugSafeHandle.cs"
              Link="Common\System\Net\DebugSafeHandle.cs" />

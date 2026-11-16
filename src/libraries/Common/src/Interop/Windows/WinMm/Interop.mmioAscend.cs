@@ -8,8 +8,11 @@ internal static partial class Interop
 {
     internal static partial class WinMM
     {
+        internal static unsafe int mmioAscend(IntPtr hMIO, MMCKINFO* lpck, int flags) =>
+            UseLegacyWave ? LegacyWave.Ascend(hMIO, lpck, flags) : MmioAscendWindows(hMIO, lpck, flags);
+
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        [LibraryImport(Libraries.WinMM)]
-        internal static unsafe partial int mmioAscend(IntPtr hMIO, MMCKINFO* lpck, int flags);
+        [LibraryImport(Libraries.WinMM, EntryPoint = "mmioAscend")]
+        private static unsafe partial int MmioAscendWindows(IntPtr hMIO, MMCKINFO* lpck, int flags);
     }
 }

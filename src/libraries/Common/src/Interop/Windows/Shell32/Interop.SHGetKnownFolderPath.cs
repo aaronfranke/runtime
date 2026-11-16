@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
 
 internal static partial class Interop
@@ -18,6 +19,105 @@ internal static partial class Interop
             uint dwFlags,
             IntPtr hToken,
             out string ppszPath);
+
+        internal static string? GetLegacyFolderPath(int folder, int flags)
+        {
+            string systemDirectory = Environment.SystemDirectory;
+            if (!NativeLibrary.TryLoad(Path.Combine(systemDirectory, Libraries.Shell32), out nint shell))
+            {
+                return null;
+            }
+
+            try
+            {
+                if (TryGetLegacyFolderPath(shell, folder | flags, out string? path))
+                {
+                    return path;
+                }
+
+                // Older versions of the shell can use the installed SHFolder redistributable.
+                if (NativeLibrary.TryLoad(Path.Combine(systemDirectory, "shfolder.dll"), out nint shfolder))
+                {
+                    try
+                    {
+                        if (TryGetLegacyFolderPath(shfolder, folder | flags, out path))
+                        {
+                            return path;
+                        }
+                    }
+                    finally
+                    {
+                        NativeLibrary.Free(shfolder);
+                    }
+                }
+
+                // The original NT 4 shell only exposes the item-list API.
+                // It can resolve existing folders without supporting an unverified path.
+                const int CSIDL_FLAG_CREATE = 0x8000;
+                return GetLegacyFolderPathFromIdList(shell, folder | (flags & CSIDL_FLAG_CREATE));
+            }
+            finally
+            {
+                NativeLibrary.Free(shell);
+            }
+        }
+
+        private static unsafe bool TryGetLegacyFolderPath(nint library, int csidl, out string? path)
+        {
+            path = null;
+            if (!NativeLibrary.TryGetExport(library, "SHGetFolderPathW", out nint address))
+            {
+                return false;
+            }
+
+            char* buffer = stackalloc char[Kernel32.MAX_PATH];
+            var getPath = (delegate* unmanaged[Stdcall]<nint, int, nint, uint, void*, int>)address;
+            if (getPath(0, csidl, 0, 0, buffer) == 0)
+            {
+                path = new string(buffer);
+            }
+            return true;
+        }
+
+        private static unsafe string? GetLegacyFolderPathFromIdList(nint shell, int csidl)
+        {
+            if (!NativeLibrary.TryGetExport(shell, "SHGetSpecialFolderLocation", out nint locationAddress) ||
+                !NativeLibrary.TryGetExport(shell, "SHGetPathFromIDListW", out nint pathAddress) ||
+                !NativeLibrary.TryGetExport(shell, "SHGetMalloc", out nint mallocAddress))
+            {
+                return null;
+            }
+
+            var getMalloc = (delegate* unmanaged[Stdcall]<nint*, int>)mallocAddress;
+            var getLocation = (delegate* unmanaged[Stdcall]<nint, int, nint*, int>)locationAddress;
+            var getPath = (delegate* unmanaged[Stdcall]<nint, void*, int>)pathAddress;
+            nint allocator = 0;
+            if (getMalloc(&allocator) != 0 || allocator == 0)
+            {
+                return null;
+            }
+
+            // On the oldest shells, use the same allocator that created the item list.
+            void** methods = *(void***)allocator;
+            var free = (delegate* unmanaged[Stdcall]<nint, nint, void>)methods[5]; // IMalloc::Free
+            var release = (delegate* unmanaged[Stdcall]<nint, uint>)methods[2]; // IUnknown::Release
+            nint itemList = 0;
+            try
+            {
+                char* buffer = stackalloc char[Kernel32.MAX_PATH];
+                return getLocation(0, csidl, &itemList) == 0 && itemList != 0 && getPath(itemList, buffer) != 0
+                    ? new string(buffer)
+                    : null;
+            }
+            finally
+            {
+                if (itemList != 0)
+                {
+                    free(allocator, itemList);
+                }
+                release(allocator);
+            }
+        }
 
         // https://msdn.microsoft.com/en-us/library/windows/desktop/dd378457.aspx
         internal static class KnownFolders

@@ -24,8 +24,11 @@ internal static partial class Interop
         internal const int WAVE_FORMAT_ADPCM = 0x0002;
         internal const int WAVE_FORMAT_IEEE_FLOAT = 0x0003;
 
+        internal static int mmioRead(IntPtr hMIO, byte[] wf, int cch) =>
+            UseLegacyWave ? LegacyWave.Read(hMIO, wf, cch) : MmioReadWindows(hMIO, wf, cch);
+
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        [LibraryImport(Libraries.WinMM)]
-        internal static partial int mmioRead(IntPtr hMIO, [MarshalAs(UnmanagedType.LPArray)] byte[] wf, int cch);
+        [LibraryImport(Libraries.WinMM, EntryPoint = "mmioRead")]
+        private static partial int MmioReadWindows(IntPtr hMIO, [MarshalAs(UnmanagedType.LPArray)] byte[] wf, int cch);
     }
 }

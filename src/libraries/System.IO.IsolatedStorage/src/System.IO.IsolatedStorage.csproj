@@ -35,8 +35,15 @@
     <Compile Include="System\IO\IsolatedStorage\IsolatedStorageFile.NonMobile.cs" />
   </ItemGroup>
 
+  <PropertyGroup Condition="'$(TargetPlatformIdentifier)' == 'windows'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants>$(DefineConstants);LEGACY_WINDOWS_IDENTITY_HASH</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'windows'">
     <Compile Include="System\IO\IsolatedStorage\Helper.Windows.cs" />
+    <Compile Include="$(CommonPath)System\Sha1ForNonSecretPurposes.cs"
+             Link="Common\System\Sha1ForNonSecretPurposes.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetPlatformIdentifier)' != 'windows'">

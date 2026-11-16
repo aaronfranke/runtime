@@ -1,0 +1,56 @@
+<!--
+  Licensed to the .NET Foundation under one or more agreements.
+  The .NET Foundation licenses this file to you under the MIT license.
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <WinNt6LldLink Condition="'$(WinNt6LldLink)' == ''">lld-link.exe</WinNt6LldLink>
+  </PropertyGroup>
+
+  <Target Name="SetupWinNt6NativeAot" AfterTargets="SetupOSSpecificProps">
+    <Error Condition="('$(_targetArchitecture)' != 'x86' and '$(_targetArchitecture)' != 'x64') or '$(OutputType)' != 'Exe' or '$(NativeLib)' != ''"
+           Text="The win_nt6 Native AOT profile currently supports win-x86 and win-x64 console applications." />
+
+    <PropertyGroup>
+      <WinNt6Gcc Condition="'$(WinNt6Gcc)' == '' and '$(_targetArchitecture)' == 'x86'">i686-w64-mingw32-gcc.exe</WinNt6Gcc>
+      <WinNt6Gcc Condition="'$(WinNt6Gcc)' == '' and '$(_targetArchitecture)' == 'x64'">x86_64-w64-mingw32-gcc.exe</WinNt6Gcc>
+      <CppLinker>$(WinNt6LldLink)</CppLinker>
+      <_WinNt6ArchFlags Condition="'$(_targetArchitecture)' == 'x86'">-march=i686 -mno-sse</_WinNt6ArchFlags>
+      <_WinNt6ArchFlags Condition="'$(_targetArchitecture)' == 'x64'">-march=x86-64</_WinNt6ArchFlags>
+      <_WinNt6CompatObject>$(NativeIntermediateOutputPath)win_nt6.obj</_WinNt6CompatObject>
+      <_WinNt6ApiList>$(NativeIntermediateOutputPath)WinNt6APIs.txt</_WinNt6ApiList>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(NativeIntermediateOutputPath)" />
+    <Exec Command="&quot;$(WinNt6Gcc)&quot; -c -O2 $(_WinNt6ArchFlags) -ffreestanding -fno-stack-protector -D_WIN32_WINNT=0x0601 &quot;$(MSBuildThisFileDirectory)WinNt6Compat.c&quot; -o &quot;$(_WinNt6CompatObject)&quot;" />
+
+    <ReadLinesFromFile File="$(MSBuildThisFileDirectory)WindowsAPIs.txt">
+      <Output TaskParameter="Lines" ItemName="_WinNt6DefaultApi" />
+    </ReadLinesFromFile>
+    <ReadLinesFromFile File="$(MSBuildThisFileDirectory)WinNt6ExcludedAPIs.txt">
+      <Output TaskParameter="Lines" ItemName="_WinNt6ExcludedApi" />
+    </ReadLinesFromFile>
+    <ItemGroup>
+      <!-- Leave calls to newer APIs lazy so they do not block startup on Windows 7.
+           Address waits stay direct to bind to the compatibility object. -->
+      <_WinNt6DefaultApi Remove="@(_WinNt6ExcludedApi)" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(_WinNt6ApiList)" Lines="@(_WinNt6DefaultApi)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+
+    <ItemGroup>
+      <DirectPInvokeList Remove="$(MSBuildThisFileDirectory)WindowsAPIs.txt" />
+      <DirectPInvokeList Include="$(_WinNt6ApiList)" />
+      <!-- Windows 7 does not ship ucrtbase.dll. Bind managed CRT calls to the static library. -->
+      <DirectPInvoke Include="ucrtbase" />
+      <LinkerArg Remove="/SUBSYSTEM:$(LinkerSubsystem);/NODEFAULTLIB:libucrt.lib;/DEFAULTLIB:ucrt.lib" />
+      <LinkerArg Include="/SUBSYSTEM:CONSOLE,6.1;/NODEFAULTLIB:ucrt.lib;/DEFAULTLIB:libucrt.lib" />
+      <LinkerArg Remove="@(LinkerArg)" Condition="$([System.String]::Copy('%(LinkerArg.Identity)').StartsWith('/SOURCELINK:'))" />
+      <!-- Resolve the compatibility symbols before LLD reads SDK import libraries. -->
+      <NativeLibrary Include="$(_WinNt6CompatObject)" />
+      <_WinNt6LinkerArg Include="@(LinkerArg)" />
+      <LinkerArg Remove="@(LinkerArg)" />
+      <LinkerArg Include="&quot;$(_WinNt6CompatObject)&quot;" />
+      <LinkerArg Include="@(_WinNt6LinkerArg)" />
+    </ItemGroup>
+  </Target>
+</Project>

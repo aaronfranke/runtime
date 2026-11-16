@@ -240,7 +240,7 @@ namespace System.Net.Sockets
                 new TcpClient(await task.ConfigureAwait(false));
         }
 
-        // This creates a TcpListener that listens on both IPv4 and IPv6 on the given port.
+        // This creates a TcpListener that listens on both IPv4 and IPv6 when dual-mode sockets are available.
         public static TcpListener Create(int port)
         {
             if (!TcpValidationHelpers.ValidatePortNumber(port))
@@ -249,15 +249,16 @@ namespace System.Net.Sockets
             }
 
             TcpListener listener;
-            if (Socket.OSSupportsIPv6)
+            if (Socket.DefaultAddressFamily == AddressFamily.InterNetworkV6)
             {
-                // If OS supports IPv6 use dual mode so both address families work.
                 listener = new TcpListener(IPAddress.IPv6Any, port);
-                if (!OperatingSystem.IsWasi()) listener.Server.DualMode = true;
+                if (!OperatingSystem.IsWasi() && !Socket.IsWindowsBeforeVista)
+                {
+                    listener.Server.DualMode = true;
+                }
             }
             else
             {
-                // If not, fall-back to old IPv4.
                 listener = new TcpListener(IPAddress.Any, port);
             }
 

@@ -16,8 +16,14 @@ namespace System.Diagnostics
     {
         internal static void EnterMutex(string name, ref Mutex? mutex)
         {
-            string mutexName = "Global\\" + name;
+            string mutexName = GetGlobalObjectName(name);
             EnterMutexWithoutGlobal(mutexName, ref mutex);
+        }
+
+        internal static string GetGlobalObjectName(string name)
+        {
+            // NT 4 rejects the Global\ namespace; its named objects use a flat namespace.
+            return Environment.OSVersion.Version.Major >= 5 ? "Global\\" + name : name;
         }
 
         internal static void EnterMutexWithoutGlobal(string mutexName, ref Mutex? mutex)

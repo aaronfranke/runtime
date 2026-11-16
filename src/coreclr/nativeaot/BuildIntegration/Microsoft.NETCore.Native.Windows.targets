@@ -290,4 +290,8 @@ int wmain(int argc, unsigned short** argv)
         MainAssembly="%(_AggregateExecutableReferencePath.Identity)"
         ResourceFile="%(_AggregateExecutableReferencePath.ShimResourceFile)" />
   </Target>
+
+  <Import Project="$(MSBuildThisFileDirectory)WinNt4.targets" Condition="'$(LegacyWindowsProfile)' == 'win_nt4'" />
+  <Import Project="$(MSBuildThisFileDirectory)WinNt5.targets" Condition="'$(LegacyWindowsProfile)' == 'win_nt5'" />
+  <Import Project="$(MSBuildThisFileDirectory)WinNt6.targets" Condition="'$(LegacyWindowsProfile)' == 'win_nt6'" />
 </Project>

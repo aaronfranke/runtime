@@ -11,8 +11,11 @@ internal static partial class Interop
         internal const int MMIO_READ = 0x00000000;
         internal const int MMIO_ALLOCBUF = 0x00010000;
 
+        internal static IntPtr mmioOpen(string fileName, IntPtr not_used, int flags) =>
+            UseLegacyWave ? LegacyWave.Open(fileName, not_used, flags) : MmioOpenWindows(fileName, not_used, flags);
+
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         [LibraryImport(Libraries.WinMM, EntryPoint = "mmioOpenW", StringMarshalling = StringMarshalling.Utf16)]
-        internal static partial IntPtr mmioOpen(string fileName, IntPtr not_used, int flags);
+        private static partial IntPtr MmioOpenWindows(string fileName, IntPtr not_used, int flags);
     }
 }

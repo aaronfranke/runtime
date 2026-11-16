@@ -21,6 +21,7 @@ namespace System.ServiceProcess
     {
         private SERVICE_STATUS _status;
         private IntPtr _statusHandle;
+        private ServiceControlCallback? _commandCallback;
         private ServiceControlCallbackEx? _commandCallbackEx;
         private ServiceMainCallback? _mainCallback;
         private ManualResetEvent? _startCompletedSignal;
@@ -686,7 +687,6 @@ namespace System.ServiceProcess
                 _status.waitHint = 0;
 
                 _mainCallback = ServiceMainCallback;
-                _commandCallbackEx = this.ServiceCommandCallbackEx;
 
                 _initialized = true;
             }
@@ -883,7 +883,17 @@ namespace System.ServiceProcess
                     Initialize(true);
                 }
 
-                _statusHandle = RegisterServiceCtrlHandlerEx(ServiceName, _commandCallbackEx, (IntPtr)0);
+                bool useExtendedHandler = OperatingSystem.IsWindowsVersionAtLeast(5);
+                if (useExtendedHandler)
+                {
+                    _commandCallbackEx = ServiceCommandCallbackEx;
+                    _statusHandle = RegisterServiceCtrlHandlerEx(ServiceName, _commandCallbackEx, (IntPtr)0);
+                }
+                else
+                {
+                    _commandCallback = ServiceCommandCallback;
+                    _statusHandle = RegisterServiceCtrlHandler(ServiceName, _commandCallback);
+                }
 
                 _nameFrozen = true;
                 if (_statusHandle == (IntPtr)0)
@@ -893,6 +903,12 @@ namespace System.ServiceProcess
                 }
 
                 _status.controlsAccepted = _acceptedCommands;
+                if (!useExtendedHandler)
+                {
+                    // NT 4's handler receives only the command and cannot receive extended event data.
+                    _status.controlsAccepted &= ~(AcceptOptions.ACCEPT_POWEREVENT | AcceptOptions.ACCEPT_SESSIONCHANGE);
+                }
+
                 _commandPropsFrozen = true;
                 if ((_status.controlsAccepted & AcceptOptions.ACCEPT_STOP) != 0)
                 {

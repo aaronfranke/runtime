@@ -58,6 +58,13 @@ namespace System.Net.Http
             }
         }
 
+        // The legacy snapshot has no WinHTTP session or automatic proxy resolver.
+        internal WinInetProxyHelper(string? proxy, string? proxyBypass)
+        {
+            _proxy = proxy;
+            _proxyBypass = proxyBypass;
+        }
+
         public string? AutoConfigUrl => _autoConfigUrl;
 
         public bool AutoDetect => _autoDetect;

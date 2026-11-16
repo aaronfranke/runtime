@@ -211,6 +211,13 @@ namespace System.Threading
 
             cancellationToken.ThrowIfCancellationRequested();
 
+            // CancelSynchronousIo requires Windows Vista. On older Windows,
+            // check for cancellation before starting the synchronous I/O.
+            if (!OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                return default;
+            }
+
             // Get the instance for this thread. If the instance doesn't have a thread handle, that
             // means we were unable to obtain one previously, and we shouldn't try to cancel I/O.
             AsyncOverSyncWithIoCancellation instance = t_instance ??= new AsyncOverSyncWithIoCancellation();

@@ -18,6 +18,22 @@ namespace System.Diagnostics
 {
     internal static partial class ProcessManager
     {
+        internal static int ProcessQueryAccess { get; } = GetProcessQueryAccess();
+
+        private static int GetProcessQueryAccess()
+        {
+            // Vista added both QueryFullProcessImageName and PROCESS_QUERY_LIMITED_INFORMATION.
+            return HasKernel32Export("QueryFullProcessImageNameW")
+                ? ProcessOptions.PROCESS_QUERY_LIMITED_INFORMATION
+                : ProcessOptions.PROCESS_QUERY_INFORMATION;
+        }
+
+        internal static bool HasKernel32Export(string name)
+        {
+            IntPtr kernel = Interop.Kernel32.GetModuleHandle(Interop.Libraries.Kernel32);
+            return kernel != IntPtr.Zero && NativeLibrary.TryGetExport(kernel, name, out _);
+        }
+
         // Allows PerformanceCounterLib (and its dependencies) to be trimmed when remote machine
         // support is not used. s_getRemoteProcessInfos is only assigned in HandleRemoteMachineSupport,
         // which is only called from public APIs that accept a remote machine name.
@@ -152,7 +168,7 @@ namespace System.Diagnostics
                 return processInfo.ProcessName;
             }
 
-            if (!isRemoteMachine)
+            if (!isRemoteMachine && ProcessQueryAccess == ProcessOptions.PROCESS_QUERY_LIMITED_INFORMATION)
             {
                 string? processName = Interop.Kernel32.GetProcessName((uint)processId);
                 if (processName is not null)
@@ -791,7 +807,7 @@ namespace System.Diagnostics
             ThreadWaitReason
         }
 
-        private static ProcessModuleCollection GetModules(int processId, bool firstModuleOnly)
+        private static unsafe ProcessModuleCollection GetModules(int processId, bool firstModuleOnly)
         {
             // preserving Everett behavior.
             if (processId == SystemProcessID || processId == IdleProcessID)
@@ -805,7 +821,7 @@ namespace System.Diagnostics
             {
                 processHandle = ProcessManager.OpenProcess(processId, Interop.Advapi32.ProcessOptions.PROCESS_QUERY_INFORMATION | Interop.Advapi32.ProcessOptions.PROCESS_VM_READ, true);
 
-                bool succeeded = Interop.Kernel32.EnumProcessModulesEx(processHandle, null, 0, out int needed, Interop.Kernel32.LIST_MODULES_ALL);
+                bool succeeded = EnumProcessModules(processHandle, null, 0, out int needed);
 
                 // The API we need to use to enumerate process modules differs on two factors:
                 //   1) If our process is running in WOW64.
@@ -819,23 +835,22 @@ namespace System.Diagnostics
                 // do the enumeration at all.  So we'll detect this case and bail out.
                 if (!succeeded)
                 {
-                    if (!Interop.Kernel32.IsWow64Process(Interop.Kernel32.GetCurrentProcess(), out bool sourceProcessIsWow64))
+                    // NT 4 and Windows 2000 have no WOW64 API.
+                    if (ProcessManager.HasKernel32Export("IsWow64Process"))
                     {
-                        throw new Win32Exception();
+                        if (!Interop.Kernel32.IsWow64Process(Interop.Kernel32.GetCurrentProcess(), out bool sourceProcessIsWow64) ||
+                            !Interop.Kernel32.IsWow64Process(processHandle, out bool targetProcessIsWow64))
+                        {
+                            throw new Win32Exception();
+                        }
+
+                        if (sourceProcessIsWow64 && !targetProcessIsWow64)
+                        {
+                            throw new Win32Exception(Interop.Errors.ERROR_PARTIAL_COPY, SR.EnumProcessModuleFailedDueToWow);
+                        }
                     }
 
-                    if (!Interop.Kernel32.IsWow64Process(processHandle, out bool targetProcessIsWow64))
-                    {
-                        throw new Win32Exception();
-                    }
-
-                    if (sourceProcessIsWow64 && !targetProcessIsWow64)
-                    {
-                        // Wow64 isn't going to allow this to happen, the best we can do is give a descriptive error to the user.
-                        throw new Win32Exception(Interop.Errors.ERROR_PARTIAL_COPY, SR.EnumProcessModuleFailedDueToWow);
-                    }
-
-                    EnumProcessModulesUntilSuccess(processHandle, null, 0, out needed, Interop.Kernel32.LIST_MODULES_ALL);
+                    EnumProcessModulesUntilSuccess(processHandle, null, 0, out needed);
                 }
 
                 int modulesCount = needed / IntPtr.Size;
@@ -843,7 +858,7 @@ namespace System.Diagnostics
                 while (true)
                 {
                     int size = needed;
-                    EnumProcessModulesUntilSuccess(processHandle, moduleHandles, size, out needed, Interop.Kernel32.LIST_MODULES_ALL);
+                    EnumProcessModulesUntilSuccess(processHandle, moduleHandles, size, out needed);
                     if (size == needed)
                     {
                         break;
@@ -882,14 +897,19 @@ namespace System.Diagnostics
 
                         IntPtr moduleHandle = moduleHandles[i];
                         Interop.Kernel32.NtModuleInfo ntModuleInfo;
-                        if (!Interop.Kernel32.GetModuleInformation(processHandle, moduleHandle, out ntModuleInfo))
+                        bool gotModuleInfo = s_useLegacyPsapi
+                            ? LegacyPsapi.GetModuleInformation(processHandle, moduleHandle, out ntModuleInfo, sizeof(Interop.Kernel32.NtModuleInfo))
+                            : Interop.Kernel32.GetModuleInformation(processHandle, moduleHandle, out ntModuleInfo);
+                        if (!gotModuleInfo)
                         {
                             HandleLastWin32Error();
                             continue;
                         }
 
                         int length = 0;
-                        while ((length = Interop.Kernel32.GetModuleBaseName(processHandle, moduleHandle, chars, chars.Length)) == chars.Length)
+                        while ((length = s_useLegacyPsapi
+                            ? LegacyPsapi.GetModuleBaseName(processHandle, moduleHandle, chars, chars.Length)
+                            : Interop.Kernel32.GetModuleBaseName(processHandle, moduleHandle, chars, chars.Length)) == chars.Length)
                         {
                             char[] toReturn = chars;
                             chars = ArrayPool<char>.Shared.Rent(length * 2);
@@ -904,7 +924,9 @@ namespace System.Diagnostics
 
                         string moduleName = new string(chars, 0, length);
 
-                        while ((length = Interop.Kernel32.GetModuleFileNameEx(processHandle, moduleHandle, chars, chars.Length)) == chars.Length)
+                        while ((length = s_useLegacyPsapi
+                            ? LegacyPsapi.GetModuleFileNameEx(processHandle, moduleHandle, chars, chars.Length)
+                            : Interop.Kernel32.GetModuleFileNameEx(processHandle, moduleHandle, chars, chars.Length)) == chars.Length)
                         {
                             char[] toReturn = chars;
                             chars = ArrayPool<char>.Shared.Rent(length * 2);
@@ -939,6 +961,10 @@ namespace System.Diagnostics
 
                 return modules;
             }
+            catch (Exception error) when (s_useLegacyPsapi && error is DllNotFoundException or EntryPointNotFoundException)
+            {
+                throw new PlatformNotSupportedException(SR.EnumProcessModuleFailed, error);
+            }
             finally
             {
                 if (!processHandle.IsInvalid)
@@ -948,7 +974,7 @@ namespace System.Diagnostics
             }
         }
 
-        private static void EnumProcessModulesUntilSuccess(SafeProcessHandle processHandle, IntPtr[]? modules, int size, out int needed, int filterFlag)
+        private static void EnumProcessModulesUntilSuccess(SafeProcessHandle processHandle, IntPtr[]? modules, int size, out int needed)
         {
             // When called on a running process, EnumProcessModules may fail with ERROR_PARTIAL_COPY
             // if the target process is not yet initialized or if the module list changes during the function call.
@@ -956,7 +982,7 @@ namespace System.Diagnostics
             int i = 0;
             while (true)
             {
-                if (Interop.Kernel32.EnumProcessModulesEx(processHandle, modules, size, out needed, filterFlag))
+                if (EnumProcessModules(processHandle, modules, size, out needed))
                 {
                     return;
                 }
@@ -997,6 +1023,11 @@ namespace System.Diagnostics
             1024;
 #endif
         private static uint MostRecentSize = DefaultCachedBufferSize;
+
+        // Windows 2000 added both Tool Help on NT and six I/O counters before the thread array.
+        private static readonly bool s_usesNt4Layout =
+            ProcessManager.ProcessQueryAccess == ProcessOptions.PROCESS_QUERY_INFORMATION &&
+            !ProcessManager.HasKernel32Export("CreateToolhelp32Snapshot");
 
         /// <summary>Gets <see cref="ProcessInfo"/> objects for each process on the local system.</summary>
         /// <param name="processIdFilter">Optional filter used to filter processes down to only those with the specified id.</param>
@@ -1055,6 +1086,7 @@ namespace System.Diagnostics
             Dictionary<int, ProcessInfo> processInfos = new Dictionary<int, ProcessInfo>(60);
 
             int processInformationOffset = 0;
+            int processHeaderSize = sizeof(SYSTEM_PROCESS_INFORMATION) + (s_usesNt4Layout ? 0 : 6 * sizeof(long));
 
             while (true)
             {
@@ -1081,7 +1113,7 @@ namespace System.Diagnostics
                         {
                             ProcessName = processName,
                             ProcessId = processId,
-                            SessionId = (int)pi.SessionId,
+                            SessionId = s_usesNt4Layout ? 0 : (int)pi.SessionId,
                             PoolPagedBytes = (long)pi.QuotaPagedPoolUsage,
                             PoolNonPagedBytes = (long)pi.QuotaNonPagedPoolUsage,
                             VirtualBytes = (long)pi.VirtualSize,
@@ -1098,7 +1130,7 @@ namespace System.Diagnostics
                         processInfos[processInfo.ProcessId] = processInfo;
 
                         // get the threads for current process
-                        int threadInformationOffset = processInformationOffset + sizeof(SYSTEM_PROCESS_INFORMATION);
+                        int threadInformationOffset = processInformationOffset + processHeaderSize;
                         for (int i = 0; i < pi.NumberOfThreads; i++)
                         {
                             ref readonly SYSTEM_THREAD_INFORMATION ti = ref MemoryMarshal.AsRef<SYSTEM_THREAD_INFORMATION>(data.Slice(threadInformationOffset));

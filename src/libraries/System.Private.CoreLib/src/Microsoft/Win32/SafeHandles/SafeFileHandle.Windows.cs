@@ -247,6 +247,15 @@ namespace Microsoft.Win32.SafeHandles
             }
         }
 
+        internal unsafe void TryCancelPendingIo(NativeOverlapped* overlapped)
+        {
+            // NT 4 and NT 5 support overlapped file I/O, but CancelIoEx requires Vista.
+            if (OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                Interop.Kernel32.CancelIoEx(this, overlapped);
+            }
+        }
+
         private void InitThreadPoolBinding()
         {
             Debug.Assert(IsAsync);
@@ -386,6 +395,12 @@ namespace Microsoft.Win32.SafeHandles
             }
 
             int error = Marshal.GetLastPInvokeError();
+            // NT 4/2000 deny pipe metadata on write-only ends.
+            if (!OperatingSystem.IsWindowsVersionAtLeast(5, 1) &&
+                error == Interop.Errors.ERROR_ACCESS_DENIED)
+            {
+                return FileHandleType.Pipe;
+            }
             return error switch
             {
                 Interop.Errors.ERROR_PIPE_NOT_CONNECTED => FileHandleType.Pipe,

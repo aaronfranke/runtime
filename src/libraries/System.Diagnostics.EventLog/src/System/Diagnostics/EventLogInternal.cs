@@ -427,7 +427,9 @@ namespace System.Diagnostics
                 if (!success)
                     throw new InvalidOperationException(SR.CantMonitorEventLog, new Win32Exception());
 
-                info.registeredWaitHandle = ThreadPool.RegisterWaitForSingleObject(info.waitHandle, new WaitOrTimerCallback(StaticCompletionCallback), info, -1, false);
+                // NT 4 can miss native change notifications. Periodic reads also deliver queued records.
+                int timeout = Environment.OSVersion.Version.Major < 5 ? 1000 : Timeout.Infinite;
+                info.registeredWaitHandle = ThreadPool.RegisterWaitForSingleObject(info.waitHandle, new WaitOrTimerCallback(StaticCompletionCallback), info, timeout, false);
                 listenerInfos[compLogName] = info;
             }
         }

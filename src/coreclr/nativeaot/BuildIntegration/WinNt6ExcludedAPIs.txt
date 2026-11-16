@@ -1,0 +1,18 @@
+# Default direct P/Invokes unavailable on Windows 7 RTM or on at least one Windows 7 SP1 architecture.
+crypt32!CertIsStrongHashToSign
+crypt32!CryptSIPGetCaps
+kernel32!AddDllDirectory
+kernel32!RemoveDllDirectory
+kernel32!SetDefaultDllDirectories
+kernel32!SetWaitableTimerEx
+kernel32!SystemTimeToTzSpecificLocalTimeEx
+kernel32!TzSpecificLocalTimeToSystemTimeEx
+ncrypt!SslComputeSessionHash
+ncrypt!SslGeneratePreMasterKey
+ntdll!RtlCopyContext
+ole32!CoRegisterActivationFilter
+oleaut32!SafeArrayAddRef
+oleaut32!SafeArrayReleaseData
+oleaut32!SafeArrayReleaseDescriptor
+oleaut32!SysAddRefString
+oleaut32!SysReleaseString

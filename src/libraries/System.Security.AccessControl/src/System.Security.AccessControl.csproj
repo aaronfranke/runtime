@@ -67,8 +67,12 @@
              Link="Common\Interop\Interop.GetSecurityInfoByName.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.SetSecurityInfoByName.cs"
              Link="Common\Interop\Interop.SetSecurityInfoByName.cs" />
+    <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.GetSecurityDescriptorControl.cs"
+             Link="Common\Interop\Interop.GetSecurityDescriptorControl.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.GetSecurityDescriptorLength.cs"
              Link="Common\Interop\Interop.GetSecurityDescriptorLength.cs" />
+    <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.MakeSelfRelativeSD.cs"
+             Link="Common\Interop\Interop.MakeSelfRelativeSD.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Kernel32\Interop.CloseHandle.cs"
              Link="Common\Interop\Interop.CloseHandle.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.OpenThreadToken_SafeTokenHandle.cs"

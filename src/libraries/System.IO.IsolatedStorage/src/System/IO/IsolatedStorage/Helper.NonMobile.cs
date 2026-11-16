@@ -17,6 +17,13 @@ namespace System.IO.IsolatedStorage
 
             // (note that Silverlight used "CoreIsolatedStorage" for a directory name and did not support machine scope)
 
+            bool legacyWindows = OperatingSystem.IsWindows() && !OperatingSystem.IsWindowsVersionAtLeast(6);
+            if (legacyWindows && IsMachine(scope) && !OperatingSystem.IsWindowsVersionAtLeast(5))
+            {
+                // NT 4 lacks the well-known SID API used to secure a new machine store.
+                throw new PlatformNotSupportedException(SR.IsolatedStorage_PlatformNotSupported);
+            }
+
             Environment.SpecialFolder specialFolder =
             IsMachine(scope) ? Environment.SpecialFolder.CommonApplicationData : // e.g. C:\ProgramData
             IsRoaming(scope) ? Environment.SpecialFolder.ApplicationData : // e.g. C:\Users\Joe\AppData\Roaming
@@ -68,7 +75,16 @@ namespace System.IO.IsolatedStorage
 
         private static Mutex CreateMutexNotOwned(string pathName)
         {
-            return new Mutex(initiallyOwned: false, name: @"Global\" + IdentityHelper.GetStrongHashSuitableForObjectName(pathName));
+            string name = IdentityHelper.GetStrongHashSuitableForObjectName(pathName);
+            try
+            {
+                return new Mutex(initiallyOwned: false, name: @"Global\" + name);
+            }
+            catch (DirectoryNotFoundException) when (OperatingSystem.IsWindows() && !OperatingSystem.IsWindowsVersionAtLeast(5))
+            {
+                // NT 4 Workstation rejects the Global selector. Keep using it where the kernel accepts it.
+                return new Mutex(initiallyOwned: false, name: name);
+            }
         }
     }
 }

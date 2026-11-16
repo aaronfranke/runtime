@@ -25,6 +25,14 @@ namespace System.Net
         public static async Task<DnsResult<AddressRecord>> ResolveAddresses(IPEndPoint[] servers, bool async, string name, AddressFamily addressFamily, CancellationToken cancellationToken)
         {
             ushort qtype = AddressFamilyToQueryType(addressFamily);
+            if (s_useLegacyDns && IPAddress.TryParse(name, out IPAddress? address))
+            {
+                // Literal address records need no DNS configuration or provider, including on
+                // NT 4. These synthetic records have no cache lifetime.
+                cancellationToken.ThrowIfCancellationRequested();
+                return new DnsResult<AddressRecord>(DnsResponseCode.NoError,
+                    address.AddressFamily == addressFamily ? [new AddressRecord(address, TimeSpan.Zero)] : null, TimeSpan.Zero);
+            }
             return await QueryAddresses(servers, async, name, qtype, cancellationToken).ConfigureAwait(false);
         }
 
@@ -324,6 +332,15 @@ namespace System.Net
                 return Task.FromCanceled<DnsQueryRawResult>(cancellationToken);
             }
 
+            if (s_useLegacyDns)
+            {
+                // DnsQuery_W cannot be interrupted. Keep native results owned by the worker
+                // until it returns, then observe cancellation before handing them to a parser.
+                return async
+                    ? Task.Run(() => DnsQueryLegacySync(servers, name, queryType, cancellationToken), cancellationToken)
+                    : Task.FromResult(DnsQueryLegacySync(servers, name, queryType, cancellationToken));
+            }
+
             if (async && s_asyncSyncCompletionBug)
             {
                 // On affected Windows versions a small set of special names always trips the
@@ -590,7 +607,7 @@ namespace System.Net
                     {
                         if (records != IntPtr.Zero)
                         {
-                            Interop.Dnsapi.DnsFree(records, Interop.Dnsapi.DnsFreeRecordList);
+                            FreeDnsRecords(records);
                         }
                         _tcs.TrySetCanceled(_cancellationToken);
                         return;
@@ -712,7 +729,7 @@ namespace System.Net
                 {
                     if (records != IntPtr.Zero)
                     {
-                        Interop.Dnsapi.DnsFree(records, Interop.Dnsapi.DnsFreeRecordList);
+                        FreeDnsRecords(records);
                     }
                     throw new OperationCanceledException(cancellationToken);
                 }
@@ -840,7 +857,7 @@ namespace System.Net
             {
                 if (RecordsHead != IntPtr.Zero)
                 {
-                    Interop.Dnsapi.DnsFree(RecordsHead, Interop.Dnsapi.DnsFreeRecordList);
+                    FreeDnsRecords(RecordsHead);
                 }
             }
         }

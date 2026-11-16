@@ -178,6 +178,8 @@
     <Compile Include="System\Net\Http\Headers\KnownHeader.Http2And3.cs" />
     <Compile Include="System\Net\Http\SocketsHttpHandler\ConnectionPool\ConnectionSetupDistributedTracing.cs" />
     <Compile Include="System\Net\Http\SocketsHttpHandler\ConnectionPool\HttpConnectionPool.cs" />
+    <Compile Include="System\Net\Http\SocketsHttpHandler\ConnectionPool\HttpConnectionPool.LegacyWindows.cs" />
+    <Compile Include="$(CommonPath)System\Net\LegacyWindowsSocketStream.cs" Link="Common\System\Net\LegacyWindowsSocketStream.cs" />
     <Compile Include="System\Net\Http\SocketsHttpHandler\ConnectionPool\HttpConnectionPool.Http1.cs" />
     <Compile Include="System\Net\Http\SocketsHttpHandler\ConnectionPool\HttpConnectionPool.Http2.cs" />
     <Compile Include="System\Net\Http\SocketsHttpHandler\ConnectionPool\HttpConnectionPool.Http3.cs" />
@@ -373,6 +375,7 @@
     <Compile Include="$(CommonPath)\System\Net\HttpStatusDescription.cs"
              Link="Common\System\Net\HttpStatusDescription.cs" />
     <Compile Include="System\Net\Http\SocketsHttpHandler\SystemProxyInfo.Windows.cs" />
+    <Compile Include="System\Net\Http\SocketsHttpHandler\SystemProxyInfo.LegacyWindows.cs" />
     <Compile Include="System\Net\Http\SocketsHttpHandler\HttpEnvironmentProxy.cs" />
     <Compile Include="System\Net\Http\SocketsHttpHandler\HttpEnvironmentProxy.Windows.cs" />
     <Compile Include="System\Net\Http\SocketsHttpHandler\HttpNoProxy.cs" />

@@ -304,6 +304,8 @@ namespace System.Management
                 return;
             }
 
+            // This .NET Framework 4 helper is an extra dependency. Official
+            // .NET installations on NT 4 and Windows 2000 cannot supply it.
             string wminet_utilsPath = Path.Combine(
                 netFrameworkInstallRoot,
                 CompatSwitches.DotNetVersion, // The same value is hard coded on Environment.Version and quirks for WMI

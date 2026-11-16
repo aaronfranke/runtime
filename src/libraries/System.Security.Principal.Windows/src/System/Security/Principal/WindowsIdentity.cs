@@ -466,7 +466,7 @@ namespace System.Security.Principal
             }
         }
 
-        private bool CheckNtTokenForSid(SecurityIdentifier sid)
+        internal bool CheckNtTokenForSid(SecurityIdentifier sid)
         {
             // special case the anonymous identity.
             if (_safeTokenHandle.IsInvalid)
@@ -491,8 +491,19 @@ namespace System.Security.Principal
                     throw new SecurityException(Marshal.GetLastPInvokeErrorMessage());
                 }
 
+                SafeAccessTokenHandle membershipToken = til == TokenImpersonationLevel.None ? token : _safeTokenHandle;
+                if (!OperatingSystem.IsWindowsVersionAtLeast(5) && Environment.OSVersion.Platform == PlatformID.Win32NT)
+                {
+                    if (til == TokenImpersonationLevel.Anonymous)
+                    {
+                        throw new SecurityException(Marshal.GetPInvokeErrorMessage(Interop.Errors.ERROR_BAD_IMPERSONATION_LEVEL));
+                    }
+
+                    return CheckNt4TokenForSid(membershipToken, sid);
+                }
+
                 // CheckTokenMembership will check if the SID is both present and enabled in the access token.
-                if (!Interop.Advapi32.CheckTokenMembership((til != TokenImpersonationLevel.None ? _safeTokenHandle : token),
+                if (!Interop.Advapi32.CheckTokenMembership(membershipToken,
                                                       sid.BinaryForm,
                                                       ref isMember))
                 {
@@ -505,6 +516,39 @@ namespace System.Security.Principal
             }
 
             return isMember;
+        }
+
+        private static unsafe bool CheckNt4TokenForSid(SafeAccessTokenHandle token, SecurityIdentifier sid)
+        {
+            // NT 4 lacks CheckTokenMembership and restricting SID lists.
+            using SafeLocalAllocHandle userInfo = GetTokenInformation(token, TokenInformationClass.TokenUser)!;
+            Interop.SID_AND_ATTRIBUTES user = userInfo.Read<Interop.TOKEN_USER>(0).sidAndAttributes;
+
+            fixed (byte* sidBytes = sid.BinaryForm)
+            {
+                if ((user.Attributes & Interop.SecurityGroups.SE_GROUP_USE_FOR_DENY_ONLY) == 0 &&
+                    Interop.Advapi32.EqualSid(user.Sid, (nint)sidBytes))
+                {
+                    return true;
+                }
+
+                using SafeLocalAllocHandle groupInfo = GetTokenInformation(token, TokenInformationClass.TokenGroups)!;
+                uint count = groupInfo.Read<uint>(0);
+                for (uint i = 0; i < count; i++)
+                {
+                    // The first SID_AND_ATTRIBUTES starts at the next pointer-aligned offset.
+                    ulong offset = (uint)sizeof(IntPtr) + (ulong)i * (uint)sizeof(Interop.SID_AND_ATTRIBUTES);
+                    Interop.SID_AND_ATTRIBUTES group = groupInfo.Read<Interop.SID_AND_ATTRIBUTES>(offset);
+                    const uint MembershipMask = Interop.SecurityGroups.SE_GROUP_ENABLED | Interop.SecurityGroups.SE_GROUP_USE_FOR_DENY_ONLY;
+                    if ((group.Attributes & MembershipMask) == Interop.SecurityGroups.SE_GROUP_ENABLED &&
+                        Interop.Advapi32.EqualSid(group.Sid, (nint)sidBytes))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         //

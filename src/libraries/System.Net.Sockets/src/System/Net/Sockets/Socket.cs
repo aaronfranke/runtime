@@ -70,7 +70,7 @@ namespace System.Net.Sockets
         private bool _disposed;
 
         public Socket(SocketType socketType, ProtocolType protocolType)
-            : this(OSSupportsIPv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork, socketType, protocolType)
+            : this(DefaultAddressFamily, socketType, protocolType)
         {
             if (OSSupportsIPv6DualMode)
             {
@@ -260,9 +260,17 @@ namespace System.Net.Sockets
 
         public static bool OSSupportsIPv4 => SocketProtocolSupportPal.OSSupportsIPv4;
         public static bool OSSupportsIPv6 => SocketProtocolSupportPal.OSSupportsIPv6;
+
+        // Windows gained dual-mode sockets in Vista. Earlier stacks require a socket per address family.
+        internal static bool IsWindowsBeforeVista => OperatingSystem.IsWindows() && !OperatingSystem.IsWindowsVersionAtLeast(6);
+        internal static AddressFamily DefaultAddressFamily =>
+            OSSupportsIPv6 && (!IsWindowsBeforeVista || !OSSupportsIPv4) ?
+            AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork;
+
         [UnsupportedOSPlatformGuard("wasi")]
         // OpenBSD does not support dual-mode (IPv4-mapped IPv6) sockets: setting IPV6_V6ONLY to 0 fails with EINVAL.
-        internal static bool OSSupportsIPv6DualMode => !OperatingSystem.IsWasi() && OSSupportsIPv6 && !RuntimeInformation.IsOSPlatform(OSPlatform.Create("OPENBSD"));
+        internal static bool OSSupportsIPv6DualMode =>
+            !OperatingSystem.IsWasi() && !IsWindowsBeforeVista && OSSupportsIPv6 && !RuntimeInformation.IsOSPlatform(OSPlatform.Create("OPENBSD"));
         [UnsupportedOSPlatformGuard("wasi")]
         internal static bool OSSupportsThreads => !OperatingSystem.IsWasi();
         public static bool OSSupportsUnixDomainSockets => SocketProtocolSupportPal.OSSupportsUnixDomainSockets;
@@ -755,6 +763,11 @@ namespace System.Net.Sockets
                 {
                     return false;
                 }
+                if (IsWindowsBeforeVista)
+                {
+                    ThrowIfDisposed();
+                    return false;
+                }
                 return ((int)GetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only)! == 0);
             }
             set
@@ -762,6 +775,16 @@ namespace System.Net.Sockets
                 if (AddressFamily != AddressFamily.InterNetworkV6)
                 {
                     throw new NotSupportedException(SR.net_invalidversion);
+                }
+
+                if (IsWindowsBeforeVista)
+                {
+                    ThrowIfDisposed();
+                    if (value)
+                    {
+                        throw new PlatformNotSupportedException();
+                    }
+                    return;
                 }
 
                 if (OperatingSystem.IsWasi() && value) throw new PlatformNotSupportedException();

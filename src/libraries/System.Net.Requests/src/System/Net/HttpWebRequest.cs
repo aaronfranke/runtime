@@ -1852,7 +1852,11 @@ namespace System.Net
 
                         socket.NoDelay = !(parameters.ServicePoint?.UseNagleAlgorithm) ?? true;
 
-                        if (parameters.Async)
+                        if (OperatingSystem.IsWindows() && !OperatingSystem.IsWindowsVersionAtLeast(6))
+                        {
+                            await LegacyWindowsSocketConnector.ConnectAsync(socket, addresses, context.DnsEndPoint.Port, cancellationToken).ConfigureAwait(false);
+                        }
+                        else if (parameters.Async)
                         {
                             await socket.ConnectAsync(addresses, context.DnsEndPoint.Port, cancellationToken).ConfigureAwait(false);
                         }
@@ -1878,6 +1882,10 @@ namespace System.Net
                         throw;
                     }
 
+                    if (OperatingSystem.IsWindows() && !OperatingSystem.IsWindowsVersionAtLeast(6))
+                    {
+                        return new LegacyWindowsSocketStream(socket);
+                    }
                     return new NetworkStream(socket, ownsSocket: true);
                 };
 

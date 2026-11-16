@@ -206,6 +206,8 @@ namespace System.Net.Sockets
                         {
                             try
                             {
+                                // NT 4 and NT 5 lack CancelIoEx. CancelIo cannot replace its
+                                // per-operation cancellation from arbitrary threads.
                                 bool canceled = Interop.Kernel32.CancelIoEx(handle, thisRef._pendingOverlappedForCancellation);
                                 if (NetEventSource.Log.IsEnabled())
                                 {

@@ -2,28 +2,36 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.IO;
 using System.Runtime.InteropServices;
 
 namespace System.Diagnostics
 {
     public sealed partial class FileVersionInfo
     {
+        private static bool UseLegacyVersionApi => !OperatingSystem.IsWindowsVersionAtLeast(6);
+
         private unsafe FileVersionInfo(string fileName)
         {
             _fileName = fileName;
 
-            uint infoSize = Interop.Version.GetFileVersionInfoSizeEx(Interop.Version.FileVersionInfoType.FILE_VER_GET_LOCALISED, _fileName, out _);
+            uint infoSize = UseLegacyVersionApi
+                ? LegacyVersion.GetSize(fileName)
+                : Interop.Version.GetFileVersionInfoSizeEx(Interop.Version.FileVersionInfoType.FILE_VER_GET_LOCALISED, fileName, out _);
             if (infoSize != 0)
             {
                 void* memPtr = NativeMemory.Alloc(infoSize);
                 try
                 {
-                    if (Interop.Version.GetFileVersionInfoEx(
-                        Interop.Version.FileVersionInfoType.FILE_VER_GET_LOCALISED | Interop.Version.FileVersionInfoType.FILE_VER_GET_NEUTRAL,
-                        _fileName,
-                        0U,
-                        infoSize,
-                        memPtr))
+                    bool read = UseLegacyVersionApi
+                        ? LegacyVersion.Read(fileName, infoSize, memPtr)
+                        : Interop.Version.GetFileVersionInfoEx(
+                            Interop.Version.FileVersionInfoType.FILE_VER_GET_LOCALISED | Interop.Version.FileVersionInfoType.FILE_VER_GET_NEUTRAL,
+                            fileName,
+                            0U,
+                            infoSize,
+                            memPtr);
+                    if (read)
                     {
                         // Some dlls might not contain correct codepage information, in which case the lookup will fail. Explorer will take
                         // a few shots in dark. We'll simulate similar behavior by falling back to the following lang-codepages.
@@ -41,9 +49,14 @@ namespace System.Diagnostics
             }
         }
 
+        private static unsafe bool QueryVersionValue(void* buffer, string name, out void* value) =>
+            UseLegacyVersionApi
+                ? LegacyVersion.Query(buffer, name, out value)
+                : Interop.Version.VerQueryValue(buffer, name, out value, out _);
+
         private static unsafe Interop.Version.VS_FIXEDFILEINFO GetFixedFileInfo(void* memPtr)
         {
-            if (Interop.Version.VerQueryValue(memPtr, "\\", out void* memRef, out _))
+            if (QueryVersionValue(memPtr, "\\", out void* memRef))
             {
                 return *(Interop.Version.VS_FIXEDFILEINFO*)memRef;
             }
@@ -63,7 +76,7 @@ namespace System.Diagnostics
 
         private static unsafe string GetFileVersionString(void* memPtr, string name)
         {
-            if (Interop.Version.VerQueryValue(memPtr, name, out void* memRef, out _) &&
+            if (QueryVersionValue(memPtr, name, out void* memRef) &&
                 memRef is not null)
             {
                 return Marshal.PtrToStringUni((IntPtr)memRef)!;
@@ -74,7 +87,7 @@ namespace System.Diagnostics
 
         private static unsafe uint GetLanguageAndCodePage(void* memPtr)
         {
-            if (Interop.Version.VerQueryValue(memPtr, "\\VarFileInfo\\Translation", out void* memRef, out _))
+            if (QueryVersionValue(memPtr, "\\VarFileInfo\\Translation", out void* memRef))
             {
                 return
                     (uint)((*(ushort*)memRef << 16) +
@@ -125,6 +138,47 @@ namespace System.Diagnostics
 
             // fileVersion is chosen based on best guess. Other fields can be used if appropriate.
             return (_fileVersion != string.Empty);
+        }
+
+        private static unsafe class LegacyVersion
+        {
+            // The Ex functions require Vista. The old loaders also lack LOAD_LIBRARY_SEARCH_SYSTEM32,
+            // so load the library by its system path and retain it for the lifetime of these exports.
+            private static readonly IntPtr s_library = NativeLibrary.Load(Path.Combine(Environment.SystemDirectory, Interop.Libraries.Version));
+
+            private static readonly delegate* unmanaged[Stdcall]<void*, uint*, uint> s_getSize =
+                (delegate* unmanaged[Stdcall]<void*, uint*, uint>)NativeLibrary.GetExport(s_library, "GetFileVersionInfoSizeW");
+            private static readonly delegate* unmanaged[Stdcall]<void*, uint, uint, void*, int> s_read =
+                (delegate* unmanaged[Stdcall]<void*, uint, uint, void*, int>)NativeLibrary.GetExport(s_library, "GetFileVersionInfoW");
+            private static readonly delegate* unmanaged[Stdcall]<void*, void*, void**, uint*, int> s_query =
+                (delegate* unmanaged[Stdcall]<void*, void*, void**, uint*, int>)NativeLibrary.GetExport(s_library, "VerQueryValueW");
+
+            internal static uint GetSize(string fileName)
+            {
+                uint ignoredHandle;
+                fixed (char* path = fileName)
+                {
+                    return s_getSize(path, &ignoredHandle);
+                }
+            }
+
+            internal static bool Read(string fileName, uint size, void* buffer)
+            {
+                fixed (char* path = fileName)
+                {
+                    return s_read(path, 0, size, buffer) != 0;
+                }
+            }
+
+            internal static bool Query(void* buffer, string name, out void* value)
+            {
+                uint length;
+                fixed (void** result = &value)
+                fixed (char* key = name)
+                {
+                    return s_query(buffer, key, result, &length) != 0;
+                }
+            }
         }
 
         private static uint HIWORD(uint dword) => (dword >> 16) & 0xffff;

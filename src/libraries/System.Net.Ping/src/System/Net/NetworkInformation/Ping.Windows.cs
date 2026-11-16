@@ -25,6 +25,8 @@ namespace System.Net.NetworkInformation
         private SafeLocalAllocHandle? _replyBuffer;
         private Interop.IpHlpApi.SafeCloseIcmpHandle? _handlePingV4;
         private Interop.IpHlpApi.SafeCloseIcmpHandle? _handlePingV6;
+        private Interop.IpHlpApi.LegacyIcmp? _legacyIcmp;
+        private IPAddress? _legacyAsyncAddress;
         private TaskCompletionSource<PingReply>? _taskCompletionSource;
 
         private PingReply SendPingCore(IPAddress address, byte[] buffer, int timeout, PingOptions? options)
@@ -36,7 +38,23 @@ namespace System.Net.NetworkInformation
 
         private Task<PingReply> SendPingAsyncCore(IPAddress address, byte[] buffer, int timeout, PingOptions? options)
         {
-            // Since isAsync == true, DoSendPingCore will execute asynchronously and return an active Task
+            if (!OperatingSystem.IsWindowsVersionAtLeast(5) && address.AddressFamily == AddressFamily.InterNetwork)
+            {
+                // NT 4 can lack IcmpSendEcho2. Run its synchronous provider on a worker.
+                byte[] request = (byte[])buffer.Clone();
+                PingOptions? requestOptions = options == null ? null : new PingOptions(options.Ttl, options.DontFragment);
+                return Task.Run(() =>
+                {
+                    PingReply reply = SendPingCore(address, request, timeout, requestOptions);
+                    if (Volatile.Read(ref _canceled))
+                    {
+                        throw new OperationCanceledException();
+                    }
+
+                    return reply;
+                });
+            }
+
             return DoSendPingCore(address, buffer, timeout, options, isAsync: true);
         }
 
@@ -44,13 +62,24 @@ namespace System.Net.NetworkInformation
         // We do not need to or want to capture such exceptions into the returned task.
         private Task<PingReply> DoSendPingCore(IPAddress address, byte[] buffer, int timeout, PingOptions? options, bool isAsync)
         {
+            _ipv6 = address.AddressFamily == AddressFamily.InterNetworkV6;
+            if (!_ipv6 && !OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                _legacyIcmp ??= Interop.IpHlpApi.LegacyIcmp.Instance ??
+                    throw new PlatformNotSupportedException(SR.net_ping_legacy_provider_unavailable);
+                if (isAsync && !_legacyIcmp.SupportsAsync)
+                {
+                    throw new PlatformNotSupportedException(SR.net_ping_legacy_async_unavailable);
+                }
+            }
+
             TaskCompletionSource<PingReply>? tcs = null;
             if (isAsync)
             {
                 _taskCompletionSource = tcs = new TaskCompletionSource<PingReply>();
+                _legacyAsyncAddress = !_ipv6 && _legacyIcmp is { RequiresAsyncParsing: true } ? address : null;
             }
 
-            _ipv6 = (address.AddressFamily == AddressFamily.InterNetworkV6);
             _sendSize = buffer.Length;
 
             // Cache correct handle.
@@ -141,7 +170,7 @@ namespace System.Net.NetworkInformation
         {
             if (!_ipv6 && _handlePingV4 == null)
             {
-                _handlePingV4 = Interop.IpHlpApi.IcmpCreateFile();
+                _handlePingV4 = _legacyIcmp?.CreateFile() ?? Interop.IpHlpApi.IcmpCreateFile();
                 if (_handlePingV4.IsInvalid)
                 {
                     _handlePingV4.Dispose();
@@ -166,14 +195,21 @@ namespace System.Net.NetworkInformation
             Interop.IpHlpApi.IP_OPTION_INFORMATION ipOptions = new Interop.IpHlpApi.IP_OPTION_INFORMATION(options);
             if (!_ipv6)
             {
+#pragma warning disable CS0618 // Address is marked obsolete
+                uint destination = (uint)address.Address;
+#pragma warning restore CS0618
+                if (_legacyIcmp != null)
+                {
+                    return (int)_legacyIcmp.SendEcho(_handlePingV4!, GetWaitHandle(isAsync), isAsync, destination,
+                        _requestBuffer!, (ushort)buffer.Length, ref ipOptions, _replyBuffer!, MaxUdpPacket, (uint)timeout);
+                }
+
                 return (int)Interop.IpHlpApi.IcmpSendEcho2(
                     _handlePingV4!,
                     GetWaitHandle(isAsync),
                     IntPtr.Zero,
                     IntPtr.Zero,
-#pragma warning disable CS0618 // Address is marked obsolete
-                    (uint)address.Address,
-#pragma warning restore CS0618
+                    destination,
                     _requestBuffer!,
                     (ushort)buffer.Length,
                     ref ipOptions,
@@ -225,6 +261,7 @@ namespace System.Net.NetworkInformation
             if (isAsync)
             {
                 UnregisterWaitHandle();
+                _legacyAsyncAddress = null;
             }
         }
 
@@ -274,7 +311,15 @@ namespace System.Net.NetworkInformation
                 {
                     canceled = _canceled;
 
-                    reply = CreatePingReply();
+                    if (_legacyAsyncAddress != null && _legacyIcmp!.ParseReplies(_replyBuffer!, MaxUdpPacket) == 0)
+                    {
+                        IPStatus status = GetStatusFromCode(Marshal.GetLastPInvokeError());
+                        reply = new PingReply(_legacyAsyncAddress, default, status, default, Array.Empty<byte>());
+                    }
+                    else
+                    {
+                        reply = CreatePingReply();
+                    }
                 }
             }
             catch (Exception e)

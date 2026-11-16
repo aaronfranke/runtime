@@ -700,8 +700,8 @@ namespace System.Diagnostics
                                 data.CounterNames = new ArrayList(counterNames);
                             }
 
-                            data.FileMappingName = "Global\\" + data.FileMappingName;
-                            data.MutexName = "Global\\" + _categoryName;
+                            data.FileMappingName = NetFrameworkUtils.GetGlobalObjectName(data.FileMappingName);
+                            data.MutexName = NetFrameworkUtils.GetGlobalObjectName(_categoryName);
                             data.FileMapping = new FileMapping(data.FileMappingName, fileMappingSize, _initialOffset);
                             s_categoryDataTable[_categoryName] = data;
                         }
@@ -1681,7 +1681,28 @@ namespace System.Diagnostics
                     // ;S-1-5-33)   the same permission granted to AU is also granted to restricted services
                     string sddlString = "D:(A;OICI;FRFWGRGW;;;AU)(A;OICI;FRFWGRGW;;;S-1-5-33)";
 
-                    if (!Interop.Advapi32.ConvertStringSecurityDescriptorToSecurityDescriptor(
+                    if (Environment.OSVersion.Platform == PlatformID.Win32NT && Environment.OSVersion.Version.Major < 5)
+                    {
+                        // NT4 has no SDDL converter. This is the self-relative binary
+                        // form of the fixed policy above, with the same two allow ACEs
+                        // and 0xc012019f access mask; it is not a general SDDL parser.
+                        ReadOnlySpan<byte> descriptor =
+                        [
+                            0x01, 0x00, 0x04, 0x80, 0x00, 0x00, 0x00, 0x00,
+                            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                            0x14, 0x00, 0x00, 0x00,
+                            0x02, 0x00, 0x30, 0x00, 0x02, 0x00, 0x00, 0x00,
+                            0x00, 0x03, 0x14, 0x00, 0x9f, 0x01, 0x12, 0xc0,
+                            0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+                            0x0b, 0x00, 0x00, 0x00,
+                            0x00, 0x03, 0x14, 0x00, 0x9f, 0x01, 0x12, 0xc0,
+                            0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+                            0x21, 0x00, 0x00, 0x00
+                        ];
+                        pSecurityDescriptor = (void*)Marshal.AllocHGlobal(descriptor.Length);
+                        descriptor.CopyTo(new Span<byte>(pSecurityDescriptor, descriptor.Length));
+                    }
+                    else if (!Interop.Advapi32.ConvertStringSecurityDescriptorToSecurityDescriptor(
                         sddlString,
                         Interop.Kernel32.PerformanceCounterOptions.SDDL_REVISION_1,
                         out pSecurityDescriptor,

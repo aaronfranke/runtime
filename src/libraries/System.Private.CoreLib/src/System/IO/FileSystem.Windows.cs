@@ -89,7 +89,19 @@ namespace System.IO
         {
             int flags = ignoreMetadataErrors ? Interop.Kernel32.REPLACEFILE_IGNORE_MERGE_ERRORS : 0;
 
-            if (!Interop.Kernel32.ReplaceFile(destFullPath, sourceFullPath, destBackupFullPath, flags, IntPtr.Zero, IntPtr.Zero))
+            bool replaced;
+            try
+            {
+                replaced = Interop.Kernel32.ReplaceFile(destFullPath, sourceFullPath, destBackupFullPath, flags, IntPtr.Zero, IntPtr.Zero);
+            }
+            catch (EntryPointNotFoundException e)
+            {
+                // NT 4 lacks ReplaceFileW. Moving a file cannot preserve the
+                // destination's metadata and provide the same backup and failure behavior.
+                throw new PlatformNotSupportedException(SR.PlatformNotSupported_FileReplace, e);
+            }
+
+            if (!replaced)
             {
                 throw Win32Marshal.GetExceptionForWin32Error(Marshal.GetLastPInvokeError());
             }
@@ -525,6 +537,12 @@ namespace System.IO
 
         internal static void CreateSymbolicLink(string path, string pathToTarget, bool isDirectory)
         {
+            // CreateSymbolicLinkW was introduced in Windows Vista.
+            if (!OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                throw new PlatformNotSupportedException(SR.PlatformNotSupported_FileSymbolicLink);
+            }
+
             Interop.Kernel32.CreateSymbolicLink(path, pathToTarget, isDirectory);
         }
 
@@ -535,6 +553,25 @@ namespace System.IO
 
         internal static FileSystemInfo? ResolveLinkTarget(string linkPath, bool returnFinalTarget, bool isDirectory)
         {
+            // Reparse points were introduced in Windows 2000. Earlier systems
+            // can validate the path using ordinary file attributes.
+            if (!OperatingSystem.IsWindowsVersionAtLeast(5))
+            {
+                Interop.Kernel32.WIN32_FILE_ATTRIBUTE_DATA data = default;
+                int error = FillAttributeInfo(linkPath, ref data, returnErrorOnNotFound: true);
+                if (error != Interop.Errors.ERROR_SUCCESS)
+                {
+                    if (isDirectory && error == Interop.Errors.ERROR_FILE_NOT_FOUND)
+                    {
+                        error = Interop.Errors.ERROR_PATH_NOT_FOUND;
+                    }
+
+                    throw Win32Marshal.GetExceptionForWin32Error(error, linkPath);
+                }
+
+                return null;
+            }
+
             string? targetPath = returnFinalTarget ?
                 GetFinalLinkTarget(linkPath, isDirectory) :
                 GetImmediateLinkTarget(linkPath, isDirectory, throwOnError: true, returnFullPath: true);
@@ -543,8 +580,10 @@ namespace System.IO
                 isDirectory ? new DirectoryInfo(targetPath) : new FileInfo(targetPath);
         }
 
-        internal static string? GetLinkTarget(string linkPath, bool isDirectory)
-            => GetImmediateLinkTarget(linkPath, isDirectory, throwOnError: false, returnFullPath: false);
+        internal static string? GetLinkTarget(string linkPath, bool isDirectory) =>
+            OperatingSystem.IsWindowsVersionAtLeast(5)
+                ? GetImmediateLinkTarget(linkPath, isDirectory, throwOnError: false, returnFullPath: false)
+                : null;
 
         /// <summary>
         /// Gets reparse point information associated to <paramref name="linkPath"/>.

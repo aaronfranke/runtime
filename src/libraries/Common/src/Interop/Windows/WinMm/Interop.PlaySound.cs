@@ -17,14 +17,20 @@ internal static partial class Interop
         internal const int SND_FILENAME = 0x20000;
         internal const int SND_NOSTOP = 0x10;
 
+        internal static bool PlaySound(string soundName, IntPtr hmod, int soundFlags) =>
+            UseLegacyWave ? LegacyWave.PlayFile(soundName, hmod, soundFlags) : PlaySoundWindows(soundName, hmod, soundFlags);
+
+        internal static bool PlaySound(byte[]? soundName, IntPtr hmod, int soundFlags) =>
+            UseLegacyWave ? LegacyWave.PlayMemory(soundName, hmod, soundFlags) : PlaySoundWindows(soundName, hmod, soundFlags);
+
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         [LibraryImport(Libraries.WinMM, EntryPoint = "PlaySoundW", StringMarshalling = StringMarshalling.Utf16)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        internal static partial bool PlaySound(string soundName, IntPtr hmod, int soundFlags);
+        private static partial bool PlaySoundWindows(string soundName, IntPtr hmod, int soundFlags);
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         [LibraryImport(Libraries.WinMM, EntryPoint = "PlaySoundW")]
         [return: MarshalAs(UnmanagedType.Bool)]
-        internal static partial bool PlaySound(byte[]? soundName, IntPtr hmod, int soundFlags);
+        private static partial bool PlaySoundWindows(byte[]? soundName, IntPtr hmod, int soundFlags);
     }
 }

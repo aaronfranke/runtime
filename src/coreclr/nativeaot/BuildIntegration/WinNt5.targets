@@ -1,0 +1,54 @@
+<!--
+  Licensed to the .NET Foundation under one or more agreements.
+  The .NET Foundation licenses this file to you under the MIT license.
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <!-- Windows 2000 predates the Vista Windows thread pool APIs. -->
+    <UseWindowsThreadPool>false</UseWindowsThreadPool>
+    <WinNt5LldLink Condition="'$(WinNt5LldLink)' == ''">lld-link.exe</WinNt5LldLink>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.Runtime.UseLegacyWindowsClock" Value="true" Trim="true" />
+  </ItemGroup>
+
+  <Target Name="SetupWinNt5NativeAot" AfterTargets="SetupOSSpecificProps">
+    <Error Condition="('$(_targetArchitecture)' != 'x86' and '$(_targetArchitecture)' != 'x64') or '$(OutputType)' != 'Exe' or '$(NativeLib)' != ''"
+           Text="The win_nt5 Native AOT profile currently supports win-x86 and win-x64 console applications." />
+    <Error Condition="'$(UseWindowsThreadPool)' != 'false'"
+           Text="The win_nt5 Native AOT profile requires the portable thread pool." />
+
+    <PropertyGroup>
+      <WinNt5Gcc Condition="'$(WinNt5Gcc)' == '' and '$(_targetArchitecture)' == 'x86'">i686-w64-mingw32-gcc.exe</WinNt5Gcc>
+      <WinNt5Gcc Condition="'$(WinNt5Gcc)' == '' and '$(_targetArchitecture)' == 'x64'">x86_64-w64-mingw32-gcc.exe</WinNt5Gcc>
+      <_WinNt5ArchFlags Condition="'$(_targetArchitecture)' == 'x86'">-march=i686 -mno-sse</_WinNt5ArchFlags>
+      <_WinNt5ArchFlags Condition="'$(_targetArchitecture)' == 'x64'">-march=x86-64</_WinNt5ArchFlags>
+      <_WinNt5Version Condition="'$(_targetArchitecture)' == 'x86'">5.0</_WinNt5Version>
+      <_WinNt5Version Condition="'$(_targetArchitecture)' == 'x64'">5.2</_WinNt5Version>
+      <CppLinker>$(WinNt5LldLink)</CppLinker>
+      <_WinNt5CompatObject>$(NativeIntermediateOutputPath)win_nt5.obj</_WinNt5CompatObject>
+    </PropertyGroup>
+    <MakeDir Directories="$(NativeIntermediateOutputPath)" />
+    <Exec Command="&quot;$(WinNt5Gcc)&quot; -c -O2 $(_WinNt5ArchFlags) -ffreestanding -fno-stack-protector -D_WIN32_WINNT=0x0A00 -DPSAPI_VERSION=1 &quot;$(MSBuildThisFileDirectory)WinNt5Compat.c&quot; -o &quot;$(_WinNt5CompatObject)&quot;" />
+
+    <ItemGroup>
+      <!-- Binding APIs added after NT 5.0 at load time prevents the process from starting. -->
+      <DirectPInvokeList Remove="$(MSBuildThisFileDirectory)WindowsAPIs.txt" />
+      <DirectPInvokeList Include="$(MSBuildThisFileDirectory)WinNt5APIs.txt" />
+      <!-- Managed CRT calls also use the static UCRT. ucrtbase.dll is absent on NT 5.0. -->
+      <DirectPInvoke Include="ucrtbase" />
+      <!-- x86 targets Windows 2000. x64 targets Windows XP Professional x64 Edition. -->
+      <LinkerArg Remove="/SUBSYSTEM:$(LinkerSubsystem);/NODEFAULTLIB:libucrt.lib;/DEFAULTLIB:ucrt.lib" />
+      <LinkerArg Include="/SUBSYSTEM:CONSOLE,$(_WinNt5Version);/NODEFAULTLIB:ucrt.lib;/DEFAULTLIB:libucrt.lib;psapi.lib;wldap32.lib;odbc32.lib;dnsapi.lib" />
+      <!-- LLD does not accept MSVC's /SOURCELINK option. -->
+      <LinkerArg Remove="@(LinkerArg)" Condition="$([System.String]::Copy('%(LinkerArg.Identity)').StartsWith('/SOURCELINK:'))" />
+      <!-- Define the compatibility symbols before LLD reads the SDK import libraries. -->
+      <NativeLibrary Include="$(_WinNt5CompatObject)" />
+      <_WinNt5LinkerArg Include="@(LinkerArg)" />
+      <LinkerArg Remove="@(LinkerArg)" />
+      <LinkerArg Include="&quot;$(_WinNt5CompatObject)&quot;" />
+      <LinkerArg Include="@(_WinNt5LinkerArg)" />
+    </ItemGroup>
+  </Target>
+</Project>

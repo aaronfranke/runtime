@@ -92,6 +92,7 @@ internal static partial class Interop
         internal const int ERROR_NO_SUCH_LOGON_SESSION = 0x520;
         internal const int ERROR_NO_SUCH_PRIVILEGE = 0x521;
         internal const int ERROR_PRIVILEGE_NOT_HELD = 0x522;
+        internal const int ERROR_NONE_MAPPED = 0x534;
         internal const int ERROR_INVALID_ACL = 0x538;
         internal const int ERROR_INVALID_SECURITY_DESCR = 0x53A;
         internal const int ERROR_INVALID_SID = 0x539;

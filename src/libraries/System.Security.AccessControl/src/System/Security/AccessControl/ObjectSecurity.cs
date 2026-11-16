@@ -501,7 +501,7 @@ namespace System.Security.AccessControl
 
         public static bool IsSddlConversionSupported()
         {
-            return true; // SDDL to binary conversions are supported on Windows 2000 and higher
+            return GenericSecurityDescriptor.IsSddlConversionSupported();
         }
 
         public string GetSecurityDescriptorSddlForm(AccessControlSections includeSections)

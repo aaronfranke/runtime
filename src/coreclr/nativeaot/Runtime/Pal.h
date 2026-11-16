@@ -247,6 +247,7 @@ bool PalSetCurrentThreadName(const char* name);
 #ifdef HOST_WINDOWS
 bool PalSetCurrentThreadNameW(const WCHAR* name);
 bool PalInitComAndFlsSlot();
+void PalDetachThreadOnReturn();
 #endif
 bool PalStartBackgroundGCThread(_In_ BackgroundCallback callback, _In_opt_ void* pCallbackContext);
 bool PalStartFinalizerThread(_In_ BackgroundCallback callback, _In_opt_ void* pCallbackContext);

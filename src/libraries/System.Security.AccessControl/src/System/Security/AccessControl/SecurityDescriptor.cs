@@ -93,7 +93,8 @@ namespace System.Security.AccessControl
 
         public static bool IsSddlConversionSupported()
         {
-            return true; // SDDL to binary conversions are supported on Windows 2000 and higher
+            // NT 4 lacks the native SDDL conversion routines.
+            return OperatingSystem.IsWindowsVersionAtLeast(5);
         }
 
         public static byte Revision
@@ -147,6 +148,11 @@ namespace System.Security.AccessControl
         // Converts the security descriptor to its SDDL form
         public string GetSddlForm(AccessControlSections includeSections)
         {
+            if (!IsSddlConversionSupported())
+            {
+                throw new PlatformNotSupportedException(SR.PlatformNotSupported_LegacySddl);
+            }
+
             byte[] binaryForm = new byte[BinaryLength];
             string? resultSddl;
             int error;
@@ -444,6 +450,11 @@ namespace System.Security.AccessControl
         private static byte[] BinaryFormFromSddlForm(string sddlForm)
         {
             ArgumentNullException.ThrowIfNull(sddlForm);
+
+            if (!IsSddlConversionSupported())
+            {
+                throw new PlatformNotSupportedException(SR.PlatformNotSupported_LegacySddl);
+            }
 
             int error;
             IntPtr byteArray = IntPtr.Zero;

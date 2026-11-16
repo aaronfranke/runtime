@@ -528,7 +528,10 @@ namespace System.Diagnostics
                 serviceKey.SetValue("Close", "ClosePerformanceData");
                 serviceKey.SetValue("Library", DllName);
                 serviceKey.SetValue("IsMultiInstance", (int)categoryType, RegistryValueKind.DWord);
-                serviceKey.SetValue("CategoryOptions", 0x3, RegistryValueKind.DWord);
+                // NT4's v1.x provider reads the legacy shared mapping. Keep the
+                // current reuse/per-category format for newer Windows versions.
+                int categoryOptions = Environment.OSVersion.Platform == PlatformID.Win32NT && Environment.OSVersion.Version.Major < 5 ? 0 : 0x3;
+                serviceKey.SetValue("CategoryOptions", categoryOptions, RegistryValueKind.DWord);
 
                 string[] counters = new string[creationData.Count];
                 string[] counterTypes = new string[creationData.Count];

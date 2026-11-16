@@ -63,7 +63,8 @@ namespace Microsoft.Win32.SafeHandles
 
         private static bool TryOpenCore(int processId, [NotNullWhen(true)] out SafeProcessHandle? processHandle, out int lastError)
         {
-            const int desiredAccess = Interop.Advapi32.ProcessOptions.PROCESS_QUERY_LIMITED_INFORMATION
+            // Pre-Vista systems require the classic query right.
+            int desiredAccess = ProcessManager.ProcessQueryAccess
                 | Interop.Advapi32.ProcessOptions.SYNCHRONIZE
                 | Interop.Advapi32.ProcessOptions.PROCESS_TERMINATE;
 

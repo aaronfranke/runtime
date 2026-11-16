@@ -89,8 +89,20 @@ namespace System.Diagnostics
 
             Interop.Kernel32.PerformanceCounterOptions.PDH_FMT_COUNTERVALUE pdhFormattedValue = default;
             long timeBase = newSample.SystemFrequency;
-            int result = Interop.Pdh.PdhFormatFromRawValue((uint)newCounterType, Interop.Kernel32.PerformanceCounterOptions.PDH_FMT_DOUBLE | Interop.Kernel32.PerformanceCounterOptions.PDH_FMT_NOSCALE | Interop.Kernel32.PerformanceCounterOptions.PDH_FMT_NOCAP100,
-                                                          ref timeBase, ref newPdhValue, ref oldPdhValue, ref pdhFormattedValue);
+            const uint format = Interop.Kernel32.PerformanceCounterOptions.PDH_FMT_DOUBLE |
+                                Interop.Kernel32.PerformanceCounterOptions.PDH_FMT_NOSCALE |
+                                Interop.Kernel32.PerformanceCounterOptions.PDH_FMT_NOCAP100;
+            int result;
+            if (OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                result = Interop.Pdh.PdhFormatFromRawValue((uint)newCounterType, format,
+                    ref timeBase, ref newPdhValue, ref oldPdhValue, ref pdhFormattedValue);
+            }
+            else if (!Interop.Pdh.TryLegacyFormatFromRawValue((uint)newCounterType, format,
+                ref timeBase, ref newPdhValue, ref oldPdhValue, ref pdhFormattedValue, out result))
+            {
+                return ComputeWithoutPdh(oldSample, newSample);
+            }
 
             if (result != Interop.Errors.ERROR_SUCCESS)
             {
@@ -103,6 +115,33 @@ namespace System.Diagnostics
 
             return (float)pdhFormattedValue.data;
 
+        }
+
+        private static float ComputeWithoutPdh(CounterSample oldSample, CounterSample newSample)
+        {
+            switch (newSample.CounterType)
+            {
+                case PerformanceCounterType.NumberOfItems32:
+                case PerformanceCounterType.NumberOfItems64:
+                case PerformanceCounterType.NumberOfItemsHEX32:
+                case PerformanceCounterType.NumberOfItemsHEX64:
+                    return (float)newSample.UnsignedRawValue;
+
+                case PerformanceCounterType.Timer100NsInverse:
+                    // % Processor Time is the complement of idle time in the sample interval.
+                    if (newSample.TimeStamp100nSec <= oldSample.TimeStamp100nSec ||
+                        newSample.UnsignedRawValue < oldSample.UnsignedRawValue)
+                    {
+                        return 0;
+                    }
+
+                    ulong elapsed = unchecked((ulong)newSample.TimeStamp100nSec - (ulong)oldSample.TimeStamp100nSec);
+                    ulong idle = newSample.UnsignedRawValue - oldSample.UnsignedRawValue;
+                    return idle > elapsed ? 0 : (float)(100 * (1 - (double)idle / elapsed));
+
+                default:
+                    throw new PlatformNotSupportedException(SR.Format(SR.PlatformNotSupported_PerfCounterFormat, newSample.CounterType));
+            }
         }
 
         // This method figures out which values are supposed to go into which structures so that PDH can do the

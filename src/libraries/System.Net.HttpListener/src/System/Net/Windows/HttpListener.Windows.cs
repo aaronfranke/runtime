@@ -155,6 +155,11 @@ namespace System.Net
 
         private void SetupV2Config()
         {
+            if (!OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                throw new PlatformNotSupportedException(SR.SystemNetHttpListener_PlatformNotSupported);
+            }
+
             ulong id = 0;
 
             //

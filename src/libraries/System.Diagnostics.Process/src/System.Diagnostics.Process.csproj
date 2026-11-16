@@ -94,6 +94,8 @@
              Link="Common\Interop\Windows\User32\Interop.WaitForInputIdle.cs" />
     <Compile Include="$(CommonPath)Microsoft\Win32\SafeHandles\SafeTokenHandle.cs"
              Link="Microsoft\Win32\SafeHandles\SafeTokenHandle.cs" />
+    <Compile Include="$(CommonPath)Interop\Windows\Kernel32\Interop.GetModuleHandle.cs"
+             Link="Common\Interop\Windows\Kernel32\Interop.GetModuleHandle.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Interop.Libraries.cs"
              Link="Common\Interop\Windows\Interop.Libraries.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Kernel32\Interop.CloseHandle.cs"
@@ -239,6 +241,7 @@
     <Compile Include="$(CommonPath)Interop\Windows\Kernel32\Interop.CancelIoEx.cs"
              Link="Common\Interop\Windows\Kernel32\Interop.CancelIoEx.cs" />
     <Compile Include="System\Diagnostics\ProcessManager.Windows.cs" />
+    <Compile Include="System\Diagnostics\ProcessManager.LegacyModules.Windows.cs" />
     <Compile Include="System\Diagnostics\ProcessStartInfo.Windows.cs" />
     <Compile Include="System\Diagnostics\ProcessThread.Windows.cs" />
     <Compile Include="System\Diagnostics\ProcessThreadTimes.cs" />

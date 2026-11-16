@@ -1,0 +1,49 @@
+<!--
+  Licensed to the .NET Foundation under one or more agreements.
+  The .NET Foundation licenses this file to you under the MIT license.
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <!-- Windows NT 4 predates the Vista Windows thread pool APIs. -->
+    <UseWindowsThreadPool>false</UseWindowsThreadPool>
+    <WinNt4Gcc Condition="'$(WinNt4Gcc)' == ''">i686-w64-mingw32-gcc.exe</WinNt4Gcc>
+    <WinNt4LldLink Condition="'$(WinNt4LldLink)' == ''">lld-link.exe</WinNt4LldLink>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.Runtime.UseLegacyWindowsClock" Value="true" Trim="true" />
+  </ItemGroup>
+
+  <Target Name="SetupWinNt4NativeAot" AfterTargets="SetupOSSpecificProps">
+    <Error Condition="'$(_targetArchitecture)' != 'x86' or '$(OutputType)' != 'Exe' or '$(NativeLib)' != ''"
+           Text="The win_nt4 Native AOT profile currently supports win-x86 console applications." />
+    <Error Condition="'$(UseWindowsThreadPool)' != 'false'"
+           Text="The win_nt4 Native AOT profile requires the portable thread pool." />
+
+    <PropertyGroup>
+      <CppLinker>$(WinNt4LldLink)</CppLinker>
+      <_WinNt4CompatObject>$(NativeIntermediateOutputPath)win_nt4.obj</_WinNt4CompatObject>
+    </PropertyGroup>
+    <MakeDir Directories="$(NativeIntermediateOutputPath)" />
+    <Exec Command="&quot;$(WinNt4Gcc)&quot; -c -O2 -march=i686 -mno-sse -ffreestanding -fno-stack-protector -D_WIN32_WINNT=0x0A00 -DPSAPI_VERSION=1 &quot;$(MSBuildThisFileDirectory)WinNt4Compat.c&quot; -o &quot;$(_WinNt4CompatObject)&quot;" />
+
+    <ItemGroup>
+      <!-- Binding APIs added after NT 4.0 at load time prevents the process from starting. -->
+      <DirectPInvokeList Remove="$(MSBuildThisFileDirectory)WindowsAPIs.txt" />
+      <DirectPInvokeList Include="$(MSBuildThisFileDirectory)WinNt4APIs.txt" />
+      <!-- Managed CRT calls also use the static UCRT. ucrtbase.dll is absent on NT 4.0. -->
+      <DirectPInvoke Include="ucrtbase" />
+      <!-- link.exe has a 5.01 floor. LLD writes both PE version fields as 4.00. -->
+      <LinkerArg Remove="/SUBSYSTEM:$(LinkerSubsystem);/NODEFAULTLIB:libucrt.lib;/DEFAULTLIB:ucrt.lib" />
+      <LinkerArg Include="/SUBSYSTEM:CONSOLE,4.0;/NODEFAULTLIB:ucrt.lib;/DEFAULTLIB:libucrt.lib;psapi.lib;wldap32.lib;odbc32.lib" />
+      <!-- LLD does not accept MSVC's /SOURCELINK option. -->
+      <LinkerArg Remove="@(LinkerArg)" Condition="$([System.String]::Copy('%(LinkerArg.Identity)').StartsWith('/SOURCELINK:'))" />
+      <!-- Define the compatibility symbols before LLD reads the SDK import libraries. -->
+      <NativeLibrary Include="$(_WinNt4CompatObject)" />
+      <_WinNt4LinkerArg Include="@(LinkerArg)" />
+      <LinkerArg Remove="@(LinkerArg)" />
+      <LinkerArg Include="&quot;$(_WinNt4CompatObject)&quot;" />
+      <LinkerArg Include="@(_WinNt4LinkerArg)" />
+    </ItemGroup>
+  </Target>
+</Project>

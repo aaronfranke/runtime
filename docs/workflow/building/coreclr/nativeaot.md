@@ -54,6 +54,31 @@ The executable looks like a native executable, in the sense that it can be debug
 
 The compiler also has a mode where each managed assembly can be compiled into a separate object file. The object files are later linked into a single executable using the platform linker. This mode is mostly used in testing (it's faster to compile this way because we don't need to recompiling the same code from e.g. CoreLib). It's not a shipping configuration and has many problems (requires exactly matching compilation settings, forfeits many optimizations, and has trouble around cross-module generic virtual method implementations).
 
+## Legacy Windows NT profiles
+
+Use the Native AOT compiler, libraries, and build integration from this branch.
+Publish a console application with `-p:PublishAot=true`, the runtime identifier
+below, and `-p:LegacyWindowsProfile=<profile>`.
+
+| Profile | Runtime identifier | Minimum Windows version             |
+| ------- | ------------------ | ----------------------------------- |
+| win_nt4 | win-x86            | Windows NT 4.0                      |
+| win_nt5 | win-x86            | Windows 2000                        |
+| win_nt5 | win-x64            | Windows XP Professional x64 Edition |
+| win_nt6 | win-x86, win-x64   | Windows 7                           |
+
+Publish a Windows 7 x86_64 application with the following command.
+
+```powershell
+dotnet publish -c Release -r win-x64 -p:PublishAot=true -p:LegacyWindowsProfile=win_nt6
+```
+
+Provide an architecture-matched MinGW compiler and LLD on `PATH`. To override
+the paths, use `WinNt4Gcc` and `WinNt4LldLink`, `WinNt5Gcc` and `WinNt5LldLink`,
+or `WinNt6Gcc` and `WinNt6LldLink`. The profiles link the Universal CRT
+statically. The compiler's CPU requirements and any OS requirements imposed by
+the application and its dependencies still apply.
+
 ## Visual Studio Solutions
 
 The repository has a number of Visual Studio Solutions files (`*.slnx`) that are useful for editing parts of the repository. Build the repo from command line first before building using the solution files. Remember to select the appropriate configuration that you built. By default, `build.cmd` builds Debug x64 and so `Debug` and `x64` must be selected in the solution build configuration drop downs.
