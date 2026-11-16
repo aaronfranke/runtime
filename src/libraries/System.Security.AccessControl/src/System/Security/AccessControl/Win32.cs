@@ -162,20 +162,51 @@ namespace System.Security.AccessControl
                 privilege?.Revert();
             }
 
-            byte[] BinaryForm;
+            byte[] binaryForm;
             try
             {
-                // Extract data from the returned pointer
-                uint Length = Interop.Advapi32.GetSecurityDescriptorLength(ByteArray);
-                BinaryForm = new byte[Length];
-                Marshal.Copy(ByteArray, BinaryForm, 0, (int)Length);
+                if (!Interop.Advapi32.GetSecurityDescriptorControl(ByteArray, out ushort control, out _))
+                {
+                    errorCode = Marshal.GetLastPInvokeError();
+                    goto Error;
+                }
+
+                if (((ControlFlags)control & ControlFlags.SelfRelative) != 0)
+                {
+                    uint length = Interop.Advapi32.GetSecurityDescriptorLength(ByteArray);
+                    binaryForm = new byte[length];
+                    Marshal.Copy(ByteArray, binaryForm, 0, (int)length);
+                }
+                else
+                {
+                    // NT 4 can return an absolute descriptor from GetSecurityInfo.
+                    uint length = 0;
+                    if (!Interop.Advapi32.MakeSelfRelativeSD(ByteArray, null, ref length))
+                    {
+                        errorCode = Marshal.GetLastPInvokeError();
+                        if (errorCode != Interop.Errors.ERROR_INSUFFICIENT_BUFFER)
+                        {
+                            goto Error;
+                        }
+                    }
+
+                    binaryForm = new byte[length];
+                    fixed (byte* destination = binaryForm)
+                    {
+                        if (!Interop.Advapi32.MakeSelfRelativeSD(ByteArray, destination, ref length))
+                        {
+                            errorCode = Marshal.GetLastPInvokeError();
+                            goto Error;
+                        }
+                    }
+                }
             }
             finally
             {
                 Marshal.FreeHGlobal(ByteArray);
             }
 
-            resultSd = new RawSecurityDescriptor(BinaryForm, 0);
+            resultSd = new RawSecurityDescriptor(binaryForm, 0);
 
             return Interop.Errors.ERROR_SUCCESS;
 

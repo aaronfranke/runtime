@@ -65,6 +65,26 @@ namespace System.Security
         [Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Security", "CA5350", Justification = "Compat: Used to generate an 8.3 filename.")]
         internal static string GetStrongHashSuitableForObjectName(Stream stream)
         {
+#if LEGACY_WINDOWS_IDENTITY_HASH
+            // Before Windows 8, CNG is absent or lacks reusable hashes. Keep the
+            // existing store and mutex names and user configuration paths by
+            // using the same SHA-1 digest for this non-secret identity.
+            if (OperatingSystem.IsWindows() && !OperatingSystem.IsWindowsVersionAtLeast(6, 2))
+            {
+                Sha1ForNonSecretPurposes sha1 = default;
+                sha1.Start();
+                Span<byte> buffer = stackalloc byte[256];
+                int read;
+                while ((read = stream.Read(buffer)) != 0)
+                {
+                    sha1.Append(buffer.Slice(0, read));
+                }
+
+                byte[] digest = new byte[20];
+                sha1.Finish(digest);
+                return ToBase32StringSuitableForDirName(digest);
+            }
+#endif
             using (SHA1 sha1 = SHA1.Create())
             {
                 return ToBase32StringSuitableForDirName(sha1.ComputeHash(stream));

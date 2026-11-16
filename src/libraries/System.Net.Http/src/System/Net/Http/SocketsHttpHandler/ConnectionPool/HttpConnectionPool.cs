@@ -669,7 +669,8 @@ namespace System.Net.Http
 
             return (stream, transportContext, activity, remoteEndPoint, connectionId);
 
-            static IPEndPoint? GetRemoteEndPoint(Stream stream) => (stream as NetworkStream)?.Socket?.RemoteEndPoint as IPEndPoint;
+            static IPEndPoint? GetRemoteEndPoint(Stream stream) => stream is LegacyWindowsSocketStream legacyStream ?
+                legacyStream.RemoteEndPoint : (stream as NetworkStream)?.Socket?.RemoteEndPoint as IPEndPoint;
         }
 
         private async ValueTask<Stream> ConnectToTcpHostAsync(string host, int port, HttpRequestMessage initialRequest, bool async, long connectionId, CancellationToken cancellationToken)
@@ -695,6 +696,10 @@ namespace System.Net.Http
                     }
 
                     stream = await streamTask.ConfigureAwait(false) ?? throw new HttpRequestException(SR.net_http_null_from_connect_callback);
+                }
+                else if (OperatingSystem.IsWindows() && !OperatingSystem.IsWindowsVersionAtLeast(6))
+                {
+                    stream = await ConnectToTcpHostLegacyWindowsAsync(endPoint, cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {

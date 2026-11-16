@@ -92,8 +92,8 @@ namespace System.IO
                         catch
                         {
                             // WaitOne can throw arbitrary exceptions (e.g., via SynchronizationContext).
-                            // Cancel the pending IO and wait for completion before freeing the overlapped.
-                            Interop.Kernel32.CancelIoEx(fileHandle, &overlapped);
+                            // Request cancellation when available, then wait before freeing the overlapped.
+                            fileHandle.TryCancelPendingIo(&overlapped);
                             int canceledBytes = 0;
                             Interop.Kernel32.GetOverlappedResult(fileHandle, &overlapped, ref canceledBytes, bWait: true);
                             throw;
@@ -204,8 +204,8 @@ namespace System.IO
                         catch
                         {
                             // WaitOne can throw arbitrary exceptions (e.g., via SynchronizationContext).
-                            // Cancel the pending IO and wait for completion before freeing the overlapped.
-                            Interop.Kernel32.CancelIoEx(fileHandle, &overlapped);
+                            // Request cancellation when available, then wait before freeing the overlapped.
+                            fileHandle.TryCancelPendingIo(&overlapped);
                             int canceledBytes = 0;
                             Interop.Kernel32.GetOverlappedResult(fileHandle, &overlapped, ref canceledBytes, bWait: true);
                             throw;

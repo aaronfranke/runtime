@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -10,6 +11,10 @@ namespace System
 {
     public readonly partial struct DateTime
     {
+        [FeatureSwitchDefinition("System.Runtime.UseLegacyWindowsClock")]
+        private static bool UseLegacyWindowsClock { get; } =
+            AppContextConfigHelper.GetBooleanConfig("System.Runtime.UseLegacyWindowsClock", defaultValue: false);
+
         internal static bool SystemSupportsLeapSeconds => LeapSecondCache.s_systemSupportsLeapSeconds;
 
         public static unsafe DateTime UtcNow
@@ -17,6 +22,12 @@ namespace System
             get
             {
                 ulong fileTimeTmp; // mark only the temp local as address-taken
+                if (UseLegacyWindowsClock)
+                {
+                    Interop.Kernel32.GetSystemTimeAsFileTime((nint)(&fileTimeTmp));
+                    return new DateTime(dateData: fileTimeTmp + (FileTimeOffset | KindUtc));
+                }
+
                 LeapSecondCache.s_pfnGetSystemTimeAsFileTime(&fileTimeTmp);
                 ulong fileTime = fileTimeTmp;
 
@@ -133,6 +144,12 @@ namespace System
 
         private static unsafe bool GetSystemSupportsLeapSeconds()
         {
+            // Legacy Windows profiles predate system leap-second support.
+            if (UseLegacyWindowsClock)
+            {
+                return false;
+            }
+
             Interop.NtDll.SYSTEM_LEAP_SECOND_INFORMATION slsi;
 
             return Interop.NtDll.NtQuerySystemInformation(
@@ -144,6 +161,11 @@ namespace System
 
         private static unsafe delegate* unmanaged[SuppressGCTransition]<ulong*, void> GetGetSystemTimeAsFileTimeFnPtr()
         {
+            if (UseLegacyWindowsClock)
+            {
+                return null;
+            }
+
             IntPtr kernel32Lib = Interop.Kernel32.LoadLibraryEx(Interop.Libraries.Kernel32, IntPtr.Zero, Interop.Kernel32.LOAD_LIBRARY_SEARCH_SYSTEM32);
             Debug.Assert(kernel32Lib != IntPtr.Zero);
 

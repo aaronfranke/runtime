@@ -31,6 +31,8 @@
              Link="Common\Interop\Windows\Interop.RegConnectRegistry.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.RegCreateKeyEx.cs"
              Link="Common\Interop\Windows\Interop.RegCreateKeyEx.cs" />
+    <Compile Include="$(CommonPath)Interop\Windows\Kernel32\Interop.GetModuleHandle.cs"
+             Link="Common\Interop\Windows\Kernel32\Interop.GetModuleHandle.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.RegDeleteKeyEx.cs"
              Link="Common\Interop\Windows\Interop.RegDeleteKeyEx.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.RegDeleteTree.cs"

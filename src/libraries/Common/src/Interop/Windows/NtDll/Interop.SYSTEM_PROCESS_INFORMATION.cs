@@ -13,6 +13,7 @@ internal static partial class Interop
         // Use for NtQuerySystemInformation
         internal const int SystemProcessInformation = 5;
 
+        // Common prefix before the six 64-bit I/O counters appended in Windows 2000.
         [StructLayout(LayoutKind.Sequential)]
         internal struct SYSTEM_PROCESS_INFORMATION
         {
@@ -38,7 +39,6 @@ internal static partial class Interop
             internal UIntPtr PagefileUsage;  // SIZE_T
             internal UIntPtr PeakPagefileUsage;  // SIZE_T
             internal UIntPtr PrivatePageCount;  // SIZE_T
-            private InlineArray6<long> Reserved7;
 
             [InlineArray(48)]
             private struct ReservedBytesBuffer

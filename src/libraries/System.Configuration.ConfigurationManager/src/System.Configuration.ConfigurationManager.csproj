@@ -21,6 +21,15 @@
     <IsPartialFacadeAssembly Condition="$([MSBuild]::GetTargetFrameworkIdentifier('$(TargetFramework)')) == '.NETFramework'">true</IsPartialFacadeAssembly>
   </PropertyGroup>
 
+  <PropertyGroup Condition="$([MSBuild]::GetTargetFrameworkIdentifier('$(TargetFramework)')) == '.NETCoreApp'">
+    <DefineConstants>$(DefineConstants);LEGACY_WINDOWS_IDENTITY_HASH</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'">
+    <Compile Include="$(CommonPath)System\Sha1ForNonSecretPurposes.cs"
+             Link="Common\System\Sha1ForNonSecretPurposes.cs" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(IsPartialFacadeAssembly)' != 'true'">
     <Compile Include="System\Configuration\DictionarySectionHandler.cs" />
     <Compile Include="System\Configuration\DpapiProtectedConfigurationProvider.cs" />

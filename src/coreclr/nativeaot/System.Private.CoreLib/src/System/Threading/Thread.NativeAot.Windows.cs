@@ -168,13 +168,6 @@ namespace System.Threading
             // CoreCLR ignores OS errors while setting the priority, so do we
             SetPriorityLive(_priority);
 
-            // If the thread was interrupted before it was started, queue the interruption now
-            if (GetThreadStateBit(Interrupted))
-            {
-                ClearThreadStateBit(Interrupted);
-                Interrupt();
-            }
-
             Interop.Kernel32.ResumeThread(_osHandle);
             return true;
         }
@@ -183,8 +176,17 @@ namespace System.Threading
         /// This is an entry point for managed threads created by application
         /// </summary>
         [UnmanagedCallersOnly(EntryPoint = "ThreadEntryPoint")]
-        private static uint ThreadEntryPoint(IntPtr parameter)
+        private static unsafe uint ThreadEntryPoint(IntPtr parameter)
         {
+            // Queue pre-start interrupts after Windows initializes the thread. Queueing before
+            // ResumeThread can terminate the process during startup on NT 4 and Windows 2000.
+            Thread thread = GCHandle<Thread>.FromIntPtr(parameter).Target;
+            if (thread.GetThreadStateBit(Interrupted))
+            {
+                thread.ClearThreadStateBit(Interrupted);
+                Interop.Kernel32.QueueUserAPC(RuntimeImports.RhGetInterruptApcCallback(), thread._osHandle!, 0);
+            }
+
             StartThread(parameter);
             return 0;
         }

@@ -32,6 +32,7 @@
 
 // Index for the fiber local storage of the attached thread pointer
 static uint32_t g_flsIndex = FLS_OUT_OF_INDEXES;
+static bool g_explicitThreadDetach;
 
 // This is called when each *fiber* is destroyed. When the home fiber of a thread is destroyed,
 // it means that the thread itself is destroyed.
@@ -55,12 +56,39 @@ bool PalInitComAndFlsSlot()
     // termination callback.
     HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
     if (FAILED(hr))
+    {
         return false;
+    }
 
     // We use fiber detach callbacks to run our thread shutdown code because the fiber detach
     // callback is made without the OS loader lock
     g_flsIndex = FlsAlloc(FiberDetachCallback);
+    // The legacy Windows profiles use a TLS slot when the OS has no FlsAlloc.
+    // NT 5.2 runs FLS callbacks after freeing static TLS, which contains the Thread.
+    // Detach runtime-created threads before returning to Windows, and clear their
+    // FLS value so the later callback cannot access the freed thread record.
+#pragma warning(suppress: 4996)
+    g_explicitThreadDetach = LOBYTE(LOWORD(GetVersion())) < 6 ||
+        GetProcAddress(GetModuleHandleA("kernel32.dll"), "FlsAlloc") == nullptr;
     return g_flsIndex != FLS_OUT_OF_INDEXES;
+}
+
+void PalDetachThreadOnReturn()
+{
+    // A TLS slot supplies the data but cannot run the FLS destruction callback.
+    // Call it from the runtime's thread entry point, outside the loader lock,
+    // after its managed entry point has returned to preemptive mode.
+    // Threads created by external native code bypass this entry point. Without FLS,
+    // or with NT 5.2's late FLS callback, they lack a safe shutdown notification.
+    if (g_explicitThreadDetach)
+    {
+        void* thread = FlsGetValue(g_flsIndex);
+        if (thread != nullptr)
+        {
+            FiberDetachCallback(thread);
+            FlsSetValue(g_flsIndex, nullptr);
+        }
+    }
 }
 
 // Register the thread with OS to be notified when thread is about to be destroyed

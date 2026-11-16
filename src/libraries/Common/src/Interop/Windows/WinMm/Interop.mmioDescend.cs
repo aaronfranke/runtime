@@ -10,9 +10,12 @@ internal static partial class Interop
     {
         internal const int MMIO_FINDRIFF = 0x00000020;
 
+        internal static unsafe int mmioDescend(IntPtr hMIO, MMCKINFO* lpck, MMCKINFO* lcpkParent, int flags) =>
+            UseLegacyWave ? LegacyWave.Descend(hMIO, lpck, lcpkParent, flags) : MmioDescendWindows(hMIO, lpck, lcpkParent, flags);
+
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        [LibraryImport(Libraries.WinMM)]
-        internal static unsafe partial int mmioDescend(
+        [LibraryImport(Libraries.WinMM, EntryPoint = "mmioDescend")]
+        private static unsafe partial int MmioDescendWindows(
             IntPtr hMIO,
             MMCKINFO* lpck,
             MMCKINFO* lcpkParent,

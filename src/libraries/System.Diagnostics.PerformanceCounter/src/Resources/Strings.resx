@@ -282,6 +282,9 @@
   <data name="CantReadCategory" xml:space="preserve">
     <value>Cannot read Category '{0}'.</value>
   </data>
+  <data name="PlatformNotSupported_PerfCounterFormat" xml:space="preserve">
+    <value>Formatting performance counter type '{0}' requires the Windows Performance Data Helper (PDH).</value>
+  </data>
   <data name="PlatformNotSupported_PerfCounters" xml:space="preserve">
     <value>Performance Counters are not supported on this platform.</value>
   </data>

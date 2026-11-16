@@ -1776,6 +1776,9 @@
     <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.GetTokenInformation_void.cs">
       <Link>Common\Interop\Windows\Advapi32\Interop.GetTokenInformation_void.cs</Link>
     </Compile>
+    <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.GetUserNameW.cs">
+      <Link>Common\Interop\Windows\Advapi32\Interop.GetUserNameW.cs</Link>
+    </Compile>
     <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.LookupAccountNameW.cs">
       <Link>Common\Interop\Windows\Advapi32\Interop.LookupAccountNameW.cs</Link>
     </Compile>
@@ -2078,6 +2081,9 @@
     </Compile>
     <Compile Include="$(CommonPath)Interop\Windows\Kernel32\Interop.GetSystemTime.cs">
       <Link>Common\Interop\Windows\Kernel32\Interop.GetSystemTime.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)Interop\Windows\Kernel32\Interop.GetSystemTimeAsFileTime.cs">
+      <Link>Common\Interop\Windows\Kernel32\Interop.GetSystemTimeAsFileTime.cs</Link>
     </Compile>
     <Compile Include="$(CommonPath)Interop\Windows\Kernel32\Interop.GetSystemTimes.cs">
       <Link>Common\Interop\Windows\Kernel32\Interop.GetSystemTimes.cs</Link>

@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -20,6 +21,12 @@ namespace System.Net.NetworkInformation
         {
             get
             {
+                if (!OperatingSystem.IsWindowsVersionAtLeast(5))
+                {
+                    // NT 4 lacks a working GetNetworkParams.
+                    return Dns.GetHostName();
+                }
+
                 return HostInformationPal.GetHostName();
             }
         }
@@ -85,7 +92,65 @@ namespace System.Net.NetworkInformation
             return list.ToArray();
         }
 
-        /// Gets the active TCP connections. Uses the native GetExtendedTcpTable API.
+        private static unsafe uint GetTcpTable(nint buffer, uint* size, bool order, AddressFamily family,
+            Interop.IpHlpApi.TcpTableClass tableClass)
+        {
+            if (OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                return Interop.IpHlpApi.GetExtendedTcpTable(buffer, size, order, (uint)family, tableClass, 0);
+            }
+
+            // GetTcpTable includes listeners and connections. The caller filters by TCP state.
+            return GetLegacyTransportTable(buffer, size, order, family, (int)tableClass, "GetTcpTable", "GetExtendedTcpTable");
+        }
+
+        private static unsafe uint GetUdpTable(nint buffer, uint* size, bool order, AddressFamily family,
+            Interop.IpHlpApi.UdpTableClass tableClass)
+        {
+            if (OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                return Interop.IpHlpApi.GetExtendedUdpTable(buffer, size, order, (uint)family, tableClass, 0);
+            }
+
+            return GetLegacyTransportTable(buffer, size, order, family, (int)tableClass, "GetUdpTable", "GetExtendedUdpTable");
+        }
+
+        private static unsafe uint GetLegacyTransportTable(nint buffer, uint* size, bool order, AddressFamily family,
+            int tableClass, string basicExport, string extendedExport)
+        {
+            const uint ERROR_NOT_SUPPORTED = 50;
+            // NT 4/5 cannot use the restricted DLL search flag. IP Helper can be absent on NT 4.
+            if (!NativeLibrary.TryLoad(Path.Combine(Environment.SystemDirectory, Interop.Libraries.IpHlpApi), out nint module))
+            {
+                return ERROR_NOT_SUPPORTED;
+            }
+
+            try
+            {
+                bool ipv4 = family == AddressFamily.InterNetwork;
+                if (!NativeLibrary.TryGetExport(module, ipv4 ? basicExport : extendedExport, out nint export))
+                {
+                    return ERROR_NOT_SUPPORTED;
+                }
+
+                // The basic tables contain IPv4 rows. IPv6 needs the extended exports added in later NT 5 releases.
+                int nativeOrder = order ? 1 : 0;
+                if (ipv4)
+                {
+                    var getTable = (delegate* unmanaged[Stdcall]<nint, uint*, int, uint>)export;
+                    return getTable(buffer, size, nativeOrder);
+                }
+
+                var getExtendedTable = (delegate* unmanaged[Stdcall]<nint, uint*, int, uint, int, uint, uint>)export;
+                return getExtendedTable(buffer, size, nativeOrder, (uint)family, tableClass, 0);
+            }
+            finally
+            {
+                NativeLibrary.Free(module);
+            }
+        }
+
+        /// Gets the active TCP connections.
         private static unsafe void GetAllTcpConnections(List<TcpConnectionInformation>? connections, List<IPEndPoint>? listening)
         {
             uint size = 0;
@@ -95,8 +160,8 @@ namespace System.Net.NetworkInformation
             if (Socket.OSSupportsIPv4)
             {
                 // Get the buffer size needed.
-                result = Interop.IpHlpApi.GetExtendedTcpTable(0, &size, order: true, (uint)AddressFamily.InterNetwork,
-                    connections is null ? Interop.IpHlpApi.TcpTableClass.TcpTableBasicListener : Interop.IpHlpApi.TcpTableClass.TcpTableBasicAll, 0);
+                result = GetTcpTable(0, &size, order: true, AddressFamily.InterNetwork,
+                    connections is null ? Interop.IpHlpApi.TcpTableClass.TcpTableBasicListener : Interop.IpHlpApi.TcpTableClass.TcpTableBasicAll);
 
                 while (result == Interop.IpHlpApi.ERROR_INSUFFICIENT_BUFFER)
                 {
@@ -104,8 +169,8 @@ namespace System.Net.NetworkInformation
                     IntPtr buffer = Marshal.AllocHGlobal((int)size);
                     try
                     {
-                        result = Interop.IpHlpApi.GetExtendedTcpTable(buffer, &size, order: true, (uint)AddressFamily.InterNetwork,
-                            connections is null ? Interop.IpHlpApi.TcpTableClass.TcpTableBasicListener : Interop.IpHlpApi.TcpTableClass.TcpTableBasicAll, 0);
+                        result = GetTcpTable(buffer, &size, order: true, AddressFamily.InterNetwork,
+                            connections is null ? Interop.IpHlpApi.TcpTableClass.TcpTableBasicListener : Interop.IpHlpApi.TcpTableClass.TcpTableBasicAll);
 
                         if (result == Interop.IpHlpApi.ERROR_SUCCESS)
                         {
@@ -145,8 +210,8 @@ namespace System.Net.NetworkInformation
             {
                 // Get the buffer size needed.
                 size = 0;
-                result = Interop.IpHlpApi.GetExtendedTcpTable(0, &size, order: true, (uint)AddressFamily.InterNetworkV6,
-                    connections is null ? Interop.IpHlpApi.TcpTableClass.TcpTableOwnerPidListener : Interop.IpHlpApi.TcpTableClass.TcpTableOwnerPidAll, 0);
+                result = GetTcpTable(0, &size, order: true, AddressFamily.InterNetworkV6,
+                    connections is null ? Interop.IpHlpApi.TcpTableClass.TcpTableOwnerPidListener : Interop.IpHlpApi.TcpTableClass.TcpTableOwnerPidAll);
 
                 while (result == Interop.IpHlpApi.ERROR_INSUFFICIENT_BUFFER)
                 {
@@ -154,8 +219,8 @@ namespace System.Net.NetworkInformation
                     IntPtr buffer = Marshal.AllocHGlobal((int)size);
                     try
                     {
-                        result = Interop.IpHlpApi.GetExtendedTcpTable(buffer, &size, order: true, (uint)AddressFamily.InterNetworkV6,
-                            connections is null ? Interop.IpHlpApi.TcpTableClass.TcpTableOwnerPidListener : Interop.IpHlpApi.TcpTableClass.TcpTableOwnerPidAll, 0);
+                        result = GetTcpTable(buffer, &size, order: true, AddressFamily.InterNetworkV6,
+                            connections is null ? Interop.IpHlpApi.TcpTableClass.TcpTableOwnerPidListener : Interop.IpHlpApi.TcpTableClass.TcpTableOwnerPidAll);
 
                         if (result == Interop.IpHlpApi.ERROR_SUCCESS)
                         {
@@ -192,7 +257,7 @@ namespace System.Net.NetworkInformation
             }
         }
 
-        /// Gets the active UDP listeners. Uses the native GetExtendedUdpTable API.
+        /// Gets the active UDP listeners.
         public override unsafe IPEndPoint[] GetActiveUdpListeners()
         {
             uint size = 0;
@@ -203,8 +268,8 @@ namespace System.Net.NetworkInformation
             if (Socket.OSSupportsIPv4)
             {
                 // Get the buffer size needed.
-                result = Interop.IpHlpApi.GetExtendedUdpTable(0, &size, order: true, (uint)AddressFamily.InterNetwork,
-                    Interop.IpHlpApi.UdpTableClass.UdpTableBasic, 0);
+                result = GetUdpTable(0, &size, order: true, AddressFamily.InterNetwork,
+                    Interop.IpHlpApi.UdpTableClass.UdpTableBasic);
 
                 while (result == Interop.IpHlpApi.ERROR_INSUFFICIENT_BUFFER)
                 {
@@ -212,8 +277,8 @@ namespace System.Net.NetworkInformation
                     IntPtr buffer = Marshal.AllocHGlobal((int)size);
                     try
                     {
-                        result = Interop.IpHlpApi.GetExtendedUdpTable(buffer, &size, order: true, (uint)AddressFamily.InterNetwork,
-                            Interop.IpHlpApi.UdpTableClass.UdpTableBasic, 0);
+                        result = GetUdpTable(buffer, &size, order: true, AddressFamily.InterNetwork,
+                            Interop.IpHlpApi.UdpTableClass.UdpTableBasic);
 
                         if (result == Interop.IpHlpApi.ERROR_SUCCESS)
                         {
@@ -246,18 +311,18 @@ namespace System.Net.NetworkInformation
             {
                 // Get the buffer size needed.
                 size = 0;
-                result = Interop.IpHlpApi.GetExtendedUdpTable(IntPtr.Zero, &size, order: true,
-                                                                        (uint)AddressFamily.InterNetworkV6,
-                                                                        Interop.IpHlpApi.UdpTableClass.UdpTableOwnerPid, 0);
+                result = GetUdpTable(IntPtr.Zero, &size, order: true,
+                                                                        AddressFamily.InterNetworkV6,
+                                                                        Interop.IpHlpApi.UdpTableClass.UdpTableOwnerPid);
                 while (result == Interop.IpHlpApi.ERROR_INSUFFICIENT_BUFFER)
                 {
                     // Allocate the buffer and get the UDP table.
                     IntPtr buffer = Marshal.AllocHGlobal((int)size);
                     try
                     {
-                        result = Interop.IpHlpApi.GetExtendedUdpTable(buffer, &size, order: true,
-                                                                                (uint)AddressFamily.InterNetworkV6,
-                                                                                Interop.IpHlpApi.UdpTableClass.UdpTableOwnerPid, 0);
+                        result = GetUdpTable(buffer, &size, order: true,
+                                                                                AddressFamily.InterNetworkV6,
+                                                                                Interop.IpHlpApi.UdpTableClass.UdpTableOwnerPid);
 
                         if (result == Interop.IpHlpApi.ERROR_SUCCESS)
                         {

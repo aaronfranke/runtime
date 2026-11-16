@@ -1203,7 +1203,11 @@ static NEWTHREAD_RETURN_TYPE RhThreadEntryPoint(void* pContext)
         ->AsTypeManager()
         ->GetClasslibFunction(ClasslibFunctionId::ThreadEntryPoint);
 
-    return pFn(pContext);
+    NEWTHREAD_RETURN_TYPE result = pFn(pContext);
+#ifdef HOST_WINDOWS
+    PalDetachThreadOnReturn();
+#endif
+    return result;
 }
 
 FCIMPL0(void*, RhGetThreadEntryPointAddress)

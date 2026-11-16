@@ -79,13 +79,22 @@ internal static partial class Interop
 
         internal sealed class SafeCloseIcmpHandle : SafeHandleZeroOrMinusOneIsInvalid
         {
+            private readonly nint _legacyClose;
+
             public SafeCloseIcmpHandle() : base(true)
             {
             }
 
-            protected override bool ReleaseHandle()
+            internal SafeCloseIcmpHandle(nint close) : this()
             {
-                return Interop.IpHlpApi.IcmpCloseHandle(handle);
+                _legacyClose = close;
+            }
+
+            protected override unsafe bool ReleaseHandle()
+            {
+                return _legacyClose != 0
+                    ? ((delegate* unmanaged[Stdcall]<nint, int>)_legacyClose)(handle) != 0
+                    : Interop.IpHlpApi.IcmpCloseHandle(handle);
             }
         }
 

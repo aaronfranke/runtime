@@ -176,7 +176,7 @@ namespace System.Threading
             private readonly SafeTokenHandle _token;
             private readonly SafeLocalAllocHandle _tokenUser;
             private readonly SafeLocalAllocHandle _dacl;
-            private readonly SafeLocalAllocHandle _sacl;
+            private readonly SafeLocalAllocHandle? _sacl;
             private readonly SafeLocalAllocHandle _securityDescriptor;
 
             public SafeLocalAllocHandle TokenUser
@@ -206,7 +206,11 @@ namespace System.Threading
                     _tokenUser = GetTokenUser(_token);
                     nint tokenUserSid = GetTokenUserSid(_tokenUser);
                     _dacl = CreateDacl(tokenUserSid, accessMask);
-                    _sacl = CreateMandatoryLabelAceSacl(_token);
+                    // Windows introduced mandatory integrity labels in Vista.
+                    if (OperatingSystem.IsWindowsVersionAtLeast(6))
+                    {
+                        _sacl = CreateMandatoryLabelAceSacl(_token);
+                    }
                     _securityDescriptor = CreateSecurityDescriptor(tokenUserSid, _dacl, _sacl);
                 }
                 catch
@@ -228,7 +232,7 @@ namespace System.Threading
                 }
 
                 _securityDescriptor.Dispose();
-                _sacl.Dispose();
+                _sacl?.Dispose();
                 _dacl.Dispose();
                 _tokenUser.Dispose();
                 _token.Dispose();

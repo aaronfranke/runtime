@@ -73,6 +73,8 @@ System.ServiceProcess.ServiceType</PackageDescription>
              Link="Common\Interop\Windows\Interop.SetServiceStatus.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.WTSSESSION_NOTIFICATION.cs"
              Link="Common\Interop\Windows\Interop.WTSSESSION_NOTIFICATION.cs" />
+    <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.RegisterServiceCtrlHandler.cs"
+             Link="Common\Interop\Windows\Interop.RegisterServiceCtrlHandler.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.RegisterServiceCtrlHandlerEx.cs"
              Link="Common\Interop\Windows\Interop.RegisterServiceCtrlHandlerEx.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.StartServiceCtrlDispatcher.cs"

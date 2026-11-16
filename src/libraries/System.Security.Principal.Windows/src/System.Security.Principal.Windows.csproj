@@ -78,6 +78,8 @@
              Link="Common\Interop\Interop.LsaGetLogonSessionData.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\SspiCli\Interop.LsaFreeReturnBuffer.cs"
              Link="Common\Interop\Interop.LsaFreeReturnBuffer.cs" />
+    <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.LookupAccountNameW.cs"
+             Link="Common\Interop\Interop.LookupAccountNameW.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.LsaLookupNames2.cs"
              Link="Common\Interop\Interop.LsaLookupNames2.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.LsaLookupSids.cs"
@@ -142,6 +144,8 @@
              Link="Common\Microsoft\Win32\SafeHandles\SafeLsaReturnBufferHandle.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.CheckTokenMembership.cs"
              Link="Common\Interop\Interop.CheckTokenMembership.cs" />
+    <Compile Include="$(CommonPath)Interop\Windows\Advapi32\Interop.EqualSid.cs"
+             Link="Common\Interop\Interop.EqualSid.cs" />
   </ItemGroup>
 
   <ItemGroup>

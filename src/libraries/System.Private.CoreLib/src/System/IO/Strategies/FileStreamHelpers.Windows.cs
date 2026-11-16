@@ -200,7 +200,7 @@ namespace System.IO.Strategies
                                 {
                                     // Try to cancel the I/O.  We ignore the return value, as cancellation is opportunistic and we
                                     // don't want to fail the operation because we couldn't cancel it.
-                                    Interop.Kernel32.CancelIoEx(innerAwaitable._fileHandle, innerAwaitable._nativeOverlapped);
+                                    innerAwaitable._fileHandle.TryCancelPendingIo(innerAwaitable._nativeOverlapped);
                                 }
                             }
                         }

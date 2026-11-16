@@ -291,7 +291,7 @@ namespace Microsoft.Win32
                     }
                 }
 
-                int ret = Interop.Advapi32.RegDeleteKeyEx(_hkey, subkey, (int)_regView, 0);
+                int ret = DeleteRegistryKey(subkey);
 
                 if (ret != 0)
                 {
@@ -347,16 +347,23 @@ namespace Microsoft.Win32
             {
                 using (key)
                 {
-                    int ret = Interop.Advapi32.RegDeleteTree(key._hkey, string.Empty);
-                    if (ret != 0)
+                    int ret;
+                    if (RegistryDeleteApis.HasDeleteTree)
                     {
-                        Win32Error(ret, null);
+                        ret = Interop.Advapi32.RegDeleteTree(key._hkey, string.Empty);
+                        if (ret != 0)
+                        {
+                            Win32Error(ret, null);
+                        }
+
+                        // RegDeleteTree leaves the opened key in place.
+                        ret = key.DeleteRegistryKey(string.Empty);
                     }
-
-                    // RegDeleteTree doesn't self-delete when lpSubKey is empty.
-                    // Manually delete the key to restore old behavior.
-
-                    ret = Interop.Advapi32.RegDeleteKeyEx(key._hkey, string.Empty, (int)_regView, 0);
+                    else
+                    {
+                        key.DeleteLegacySubKeys();
+                        ret = DeleteRegistryKey(subkey);
+                    }
                     if (ret != 0)
                     {
                         Win32Error(ret, null);
@@ -370,6 +377,42 @@ namespace Microsoft.Win32
                     throw new ArgumentException(SR.Arg_RegSubKeyAbsent);
                 }
             }
+        }
+
+        private int DeleteRegistryKey(string subkey)
+        {
+            return RegistryDeleteApis.HasDeleteKeyEx
+                ? Interop.Advapi32.RegDeleteKeyEx(_hkey, subkey, (int)_regView, 0)
+                : Interop.Advapi32.RegDeleteKey(_hkey, subkey);
+        }
+
+        private void DeleteLegacySubKeys()
+        {
+            // NT 4 and Windows 2000 only delete leaf keys with the classic API.
+            foreach (string name in GetSubKeyNames())
+            {
+                using (RegistryKey? child = InternalOpenSubKeyWithoutSecurityChecks(name, true))
+                {
+                    child?.DeleteLegacySubKeys();
+                }
+
+                int ret = DeleteRegistryKey(name);
+                if (ret != Interop.Errors.ERROR_SUCCESS && ret != Interop.Errors.ERROR_FILE_NOT_FOUND)
+                {
+                    Win32Error(ret, null);
+                }
+            }
+        }
+
+        private static class RegistryDeleteApis
+        {
+            private static readonly IntPtr s_advapi32 = Interop.Kernel32.GetModuleHandle(Interop.Libraries.Advapi32);
+
+            internal static readonly bool HasDeleteKeyEx = HasExport("RegDeleteKeyExW");
+            internal static readonly bool HasDeleteTree = HasExport("RegDeleteTreeW");
+
+            private static bool HasExport(string name) =>
+                s_advapi32 != IntPtr.Zero && NativeLibrary.TryGetExport(s_advapi32, name, out _);
         }
 
         /// <summary>Deletes the specified value from this key.</summary>

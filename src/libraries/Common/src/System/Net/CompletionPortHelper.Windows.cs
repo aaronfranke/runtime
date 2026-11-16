@@ -9,6 +9,12 @@ namespace System.Net.Sockets
     {
         internal static bool SkipCompletionPortOnSuccess(SafeHandle handle)
         {
+            // NT 4 and NT 5 can use IOCP, but lack this notification-suppression API.
+            if (!OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                return false;
+            }
+
             return Interop.Kernel32.SetFileCompletionNotificationModes(handle,
                 Interop.Kernel32.FileCompletionNotificationModes.SkipCompletionPortOnSuccess |
                 Interop.Kernel32.FileCompletionNotificationModes.SkipSetEventOnHandle);

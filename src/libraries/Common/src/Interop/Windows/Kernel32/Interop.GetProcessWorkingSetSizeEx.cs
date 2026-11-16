@@ -13,5 +13,10 @@ internal static partial class Interop
         [LibraryImport(Libraries.Kernel32, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static partial bool GetProcessWorkingSetSizeEx(SafeProcessHandle handle, out IntPtr min, out IntPtr max, out int flags);
+
+        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+        [LibraryImport(Libraries.Kernel32, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool GetProcessWorkingSetSize(SafeProcessHandle handle, out IntPtr min, out IntPtr max);
     }
 }

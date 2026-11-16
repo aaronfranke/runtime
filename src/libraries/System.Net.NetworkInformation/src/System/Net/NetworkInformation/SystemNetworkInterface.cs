@@ -8,7 +8,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace System.Net.NetworkInformation
 {
-    internal sealed class SystemNetworkInterface : NetworkInterface
+    internal sealed partial class SystemNetworkInterface : NetworkInterface
     {
         private readonly string _name;
         private readonly string _id;
@@ -28,7 +28,9 @@ namespace System.Net.NetworkInformation
         {
             get
             {
-                return GetBestInterfaceForAddress(IPAddress.Loopback);
+                return OperatingSystem.IsWindowsVersionAtLeast(6)
+                    ? GetBestInterfaceForAddress(IPAddress.Loopback)
+                    : GetLegacyLoopbackInterfaceIndex();
             }
         }
 
@@ -59,6 +61,11 @@ namespace System.Net.NetworkInformation
         {
             try
             {
+                if (!OperatingSystem.IsWindowsVersionAtLeast(6))
+                {
+                    return GetLegacyNetworkAvailability();
+                }
+
                 NetworkInterface[] networkInterfaces = GetNetworkInterfaces();
                 foreach (NetworkInterface netInterface in networkInterfaces)
                 {
@@ -69,9 +76,12 @@ namespace System.Net.NetworkInformation
                     }
                 }
             }
-            catch (NetworkInformationException nie)
+            catch (Exception error) when (error is NetworkInformationException or SocketException)
             {
-                if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(nie);
+                if (NetEventSource.Log.IsEnabled())
+                {
+                    NetEventSource.Error(error);
+                }
             }
 
             return false;
@@ -79,6 +89,11 @@ namespace System.Net.NetworkInformation
 
         internal static unsafe NetworkInterface[] GetNetworkInterfaces()
         {
+            if (!OperatingSystem.IsWindowsVersionAtLeast(6))
+            {
+                return GetLegacyNetworkInterfaces();
+            }
+
             uint bufferSize = 0;
 
             List<SystemNetworkInterface> interfaceList = new List<SystemNetworkInterface>();

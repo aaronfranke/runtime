@@ -8,8 +8,13 @@ namespace System.Net.NetworkInformation
         private readonly Interop.IpHlpApi.MibIfRow2 _ifRow;
 
         internal SystemIPInterfaceStatistics(long index)
+            : this(GetIfEntry2(index))
         {
-            _ifRow = GetIfEntry2(index);
+        }
+
+        internal SystemIPInterfaceStatistics(in Interop.IpHlpApi.MibIfRow2 ifRow)
+        {
+            _ifRow = ifRow;
         }
 
         public override long OutputQueueLength { get { return (long)_ifRow.outQLen; } }

@@ -489,6 +489,17 @@ namespace System.Security.Principal
         {
             ArgumentNullException.ThrowIfNull(sddlForm);
 
+            if (!OperatingSystem.IsWindowsVersionAtLeast(5))
+            {
+                // NT 4 lacks ConvertStringSidToSidW. Numeric SIDs need no account lookup.
+                if (!TryCreateFromNumericString(sddlForm))
+                {
+                    throw new ArgumentException(SR.Argument_InvalidValue, nameof(sddlForm));
+                }
+
+                return;
+            }
+
             //
             // Call into the underlying O/S conversion routine
             //
@@ -510,6 +521,51 @@ namespace System.Security.Principal
             }
 
             CreateFromBinaryForm(resultSid!, 0);
+        }
+
+        [MemberNotNullWhen(true, nameof(_binaryForm))]
+        [MemberNotNullWhen(true, nameof(_subAuthorities))]
+        private bool TryCreateFromNumericString(ReadOnlySpan<char> sddlForm)
+        {
+            const string prefix = "S-1-";
+            if (!sddlForm.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || sddlForm.Contains('\0'))
+            {
+                return false;
+            }
+
+            ReadOnlySpan<char> numericParts = sddlForm[prefix.Length..];
+            Span<Range> parts = stackalloc Range[MaxSubAuthorities + 1];
+            int count = numericParts.Split(parts, '-');
+            if (count < 2 ||
+                !TryParseSidComponent(numericParts[parts[0]], out ulong authority) ||
+                authority > MaxIdentifierAuthority)
+            {
+                return false;
+            }
+
+            Span<int> subAuthorities = stackalloc int[count - 1];
+            for (int i = 1; i < count; i++)
+            {
+                if (!TryParseSidComponent(numericParts[parts[i]], out ulong value) || value > uint.MaxValue)
+                {
+                    return false;
+                }
+
+                subAuthorities[i - 1] = unchecked((int)value);
+            }
+
+            CreateFromParts((IdentifierAuthority)authority, subAuthorities);
+            return true;
+        }
+
+        private static bool TryParseSidComponent(ReadOnlySpan<char> component, out ulong value)
+        {
+            if (component.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                return ulong.TryParse(component[2..], NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out value);
+            }
+
+            return ulong.TryParse(component, NumberStyles.None, CultureInfo.InvariantCulture, out value);
         }
 
         //

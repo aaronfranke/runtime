@@ -494,7 +494,12 @@ namespace System.Diagnostics
             NativeOverlapped* overlapped,
             EventWaitHandle waitHandle)
         {
-            if (Interop.Kernel32.ReadFile(handle, buffer, bufferLength, IntPtr.Zero, overlapped) != 0)
+            // Windows 7 documents a non-null byte-count pointer, even for overlapped reads.
+            // Ignore that immediate count; GetOverlappedResult supplies the completion count.
+            int result = Environment.OSVersion.Platform == PlatformID.Win32NT && !OperatingSystem.IsWindowsVersionAtLeast(6, 2)
+                ? Interop.Kernel32.ReadFile(handle, buffer, bufferLength, out _, overlapped)
+                : Interop.Kernel32.ReadFile(handle, buffer, bufferLength, IntPtr.Zero, overlapped);
+            if (result != 0)
             {
                 waitHandle.Set();
                 return true;

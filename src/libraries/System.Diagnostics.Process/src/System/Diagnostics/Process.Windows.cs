@@ -330,9 +330,10 @@ namespace System.Diagnostics
         {
             using (SafeProcessHandle handle = GetProcessHandle(Interop.Advapi32.ProcessOptions.PROCESS_QUERY_INFORMATION))
             {
-                int ignoredFlags;
-                if (!Interop.Kernel32.GetProcessWorkingSetSizeEx(handle, out minWorkingSet, out maxWorkingSet, out ignoredFlags))
+                if (!TryGetWorkingSetLimits(handle, out minWorkingSet, out maxWorkingSet))
+                {
                     throw new Win32Exception();
+                }
             }
         }
 
@@ -346,8 +347,7 @@ namespace System.Diagnostics
             using (SafeProcessHandle handle = GetProcessHandle(Interop.Advapi32.ProcessOptions.PROCESS_QUERY_INFORMATION | Interop.Advapi32.ProcessOptions.PROCESS_SET_QUOTA))
             {
                 IntPtr min, max;
-                int ignoredFlags;
-                if (!Interop.Kernel32.GetProcessWorkingSetSizeEx(handle, out min, out max, out ignoredFlags))
+                if (!TryGetWorkingSetLimits(handle, out min, out max))
                 {
                     throw new Win32Exception();
                 }
@@ -373,16 +373,17 @@ namespace System.Diagnostics
                     }
                 }
 
-                // We use SetProcessWorkingSetSizeEx which gives an option to follow
-                // the max and min value even in low-memory and abundant-memory situations.
-                // However, we do not use these flags to emulate the existing behavior
-                if (!Interop.Kernel32.SetProcessWorkingSetSizeEx(handle, min, max, 0))
+                // Flags of zero preserve the advisory limits of the original API.
+                bool set = ProcessManager.HasKernel32Export("SetProcessWorkingSetSizeEx")
+                    ? Interop.Kernel32.SetProcessWorkingSetSizeEx(handle, min, max, 0)
+                    : Interop.Kernel32.SetProcessWorkingSetSize(handle, min, max);
+                if (!set)
                 {
                     throw new Win32Exception();
                 }
 
                 // The value may be rounded/changed by the OS, so go get it
-                if (!Interop.Kernel32.GetProcessWorkingSetSizeEx(handle, out min, out max, out ignoredFlags))
+                if (!TryGetWorkingSetLimits(handle, out min, out max))
                 {
                     throw new Win32Exception();
                 }
@@ -391,6 +392,12 @@ namespace System.Diagnostics
                 resultingMax = max;
             }
         }
+
+        // NT 4 and Windows 2000 expose the original working set APIs.
+        private static bool TryGetWorkingSetLimits(SafeProcessHandle handle, out IntPtr min, out IntPtr max) =>
+            ProcessManager.HasKernel32Export("GetProcessWorkingSetSizeEx")
+                ? Interop.Kernel32.GetProcessWorkingSetSizeEx(handle, out min, out max, out _)
+                : Interop.Kernel32.GetProcessWorkingSetSize(handle, out min, out max);
 
         private static ConsoleEncoding GetEncoding(int codePage)
         {
@@ -401,7 +408,7 @@ namespace System.Diagnostics
         /// <summary>Gets timing information for the associated process.</summary>
         private ProcessThreadTimes GetProcessTimes()
         {
-            using (SafeProcessHandle handle = GetProcessHandle(Interop.Advapi32.ProcessOptions.PROCESS_QUERY_LIMITED_INFORMATION, false))
+            using (SafeProcessHandle handle = GetProcessHandle(ProcessManager.ProcessQueryAccess, false))
             {
                 if (handle.IsInvalid)
                 {
@@ -687,7 +694,7 @@ namespace System.Diagnostics
         private bool TryGetStartTime(out DateTime startTime)
         {
             startTime = default;
-            using (SafeProcessHandle handle = GetProcessHandle(Interop.Advapi32.ProcessOptions.PROCESS_QUERY_LIMITED_INFORMATION, false))
+            using (SafeProcessHandle handle = GetProcessHandle(ProcessManager.ProcessQueryAccess, false))
             {
                 if (handle.IsInvalid)
                 {

@@ -2,10 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Runtime.InteropServices;
 using System.Security.Claims;
-using Microsoft.Win32.SafeHandles;
 
 namespace System.Security.Principal
 {
@@ -139,44 +136,7 @@ namespace System.Security.Principal
         {
             ArgumentNullException.ThrowIfNull(sid);
 
-            // special case the anonymous identity.
-            if (_identity.AccessToken.IsInvalid)
-                return false;
-
-            // CheckTokenMembership expects an impersonation token
-            using SafeAccessTokenHandle invalidHandle = SafeAccessTokenHandle.InvalidHandle;
-            SafeAccessTokenHandle token = invalidHandle;
-            try
-            {
-                if (_identity.ImpersonationLevel == TokenImpersonationLevel.None)
-                {
-                    if (!Interop.Advapi32.DuplicateTokenEx(_identity.AccessToken,
-                                                      (uint)TokenAccessLevels.Query,
-                                                      IntPtr.Zero,
-                                                      (uint)TokenImpersonationLevel.Identification,
-                                                      (uint)TokenType.TokenImpersonation,
-                                                      ref token))
-                    {
-                        throw new SecurityException(Marshal.GetLastPInvokeErrorMessage());
-                    }
-                }
-
-                bool isMember = false;
-
-                // CheckTokenMembership will check if the SID is both present and enabled in the access token.
-                if (!Interop.Advapi32.CheckTokenMembership((_identity.ImpersonationLevel != TokenImpersonationLevel.None ? _identity.AccessToken : token),
-                                                      sid.BinaryForm,
-                                                      ref isMember))
-                {
-                    throw new SecurityException(Marshal.GetLastPInvokeErrorMessage());
-                }
-
-                return isMember;
-            }
-            finally
-            {
-                token.Dispose();
-            }
+            return _identity.CheckNtTokenForSid(sid);
         }
 
         // This is called by AppDomain.GetThreadPrincipal() via reflection.

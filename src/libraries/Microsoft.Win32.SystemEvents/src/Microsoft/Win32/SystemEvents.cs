@@ -503,18 +503,7 @@ namespace Microsoft.Win32
                     IntPtr window = systemEvents._windowHandle;
                     if (window != IntPtr.Zero)
                     {
-                        IntPtr module = Interop.Kernel32.LoadLibrary(Interop.Libraries.Wtsapi32);
-                        if (module != IntPtr.Zero)
-                        {
-                            try
-                            {
-                                s_registeredSessionNotification = Interop.Wtsapi32.WTSRegisterSessionNotification(window, Interop.Wtsapi32.NOTIFY_FOR_THIS_SESSION);
-                            }
-                            finally
-                            {
-                                Interop.Kernel32.FreeLibrary(module);
-                            }
-                        }
+                        s_registeredSessionNotification = SystemEventsSession.Register(window, Interop.Wtsapi32.NOTIFY_FOR_THIS_SESSION);
                     }
                     GC.KeepAlive(systemEvents);
                 }
@@ -530,7 +519,7 @@ namespace Microsoft.Win32
                 IntPtr window = _windowHandle;
                 if (window != IntPtr.Zero && s_registeredSessionNotification)
                 {
-                    Interop.Wtsapi32.WTSUnRegisterSessionNotification(window);
+                    SystemEventsSession.Unregister(window);
                     s_registeredSessionNotification = false;
                 }
                 _windowHandle = IntPtr.Zero;

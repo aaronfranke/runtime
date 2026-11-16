@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
+using System.IO;
 using System.Reflection;
 using System.Security;
 using Xunit;
@@ -25,6 +26,26 @@ namespace Tests.System.Security
             // our copy of the code. Results should NOT change as IsolatedStorage depends
             // on this for creating a stable hash based directory name.
             Assert.Equal(expected, IdentityHelper.ToBase32StringSuitableForDirName(buff));
+        }
+
+        [Theory]
+        [InlineData(0, "0zdo44rnllnsvlsa5pvay3heqpyhjefg")]
+        [InlineData(3, "m0c5sitt1a1gcfwc1dzeczhk3whbnijx")]
+        [InlineData(255, "0mhedxrjgklnkxay4yna4i3rchza4wik")]
+        [InlineData(256, "jww3xki4xoidjh2dmlsryuvjoex5itv0")]
+        [InlineData(257, "jwxh3mg42mfifh0z0xgrdvzj0g2cjxvd")]
+        [InlineData(1025, "a2zyy0memispkkrjy04f3unh3koauhvm")]
+        [SkipOnPlatform(TestPlatforms.Browser, "Not supported on Browser.")]
+        public void GetStrongHashSuitableForObjectName_Stream(int length, string expected)
+        {
+            byte[] data = new byte[length];
+            for (int i = 0; i < data.Length; i++)
+            {
+                data[i] = unchecked((byte)i);
+            }
+
+            using var stream = new MemoryStream(data, writable: false);
+            Assert.Equal(expected, IdentityHelper.GetStrongHashSuitableForObjectName(stream));
         }
 
         [Fact]

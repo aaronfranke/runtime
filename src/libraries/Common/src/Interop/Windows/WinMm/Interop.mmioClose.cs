@@ -8,8 +8,11 @@ internal static partial class Interop
 {
     internal static partial class WinMM
     {
+        internal static int mmioClose(IntPtr hMIO, int flags) =>
+            UseLegacyWave ? LegacyWave.Close(hMIO, flags) : MmioCloseWindows(hMIO, flags);
+
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        [LibraryImport(Interop.Libraries.WinMM)]
-        internal static partial int mmioClose(IntPtr hMIO, int flags);
+        [LibraryImport(Libraries.WinMM, EntryPoint = "mmioClose")]
+        private static partial int MmioCloseWindows(IntPtr hMIO, int flags);
     }
 }

@@ -12,8 +12,18 @@ internal static partial class Interop
         internal static void CreateHardLink(string hardLinkFilePath, string targetFilePath)
         {
             string originalPath = hardLinkFilePath;
-            hardLinkFilePath = PathInternal.EnsureExtendedPrefix(hardLinkFilePath);
-            targetFilePath = PathInternal.EnsureExtendedPrefix(targetFilePath);
+            if (OperatingSystem.IsWindowsVersionAtLeast(5, 1))
+            {
+                hardLinkFilePath = PathInternal.EnsureExtendedPrefix(hardLinkFilePath);
+                targetFilePath = PathInternal.EnsureExtendedPrefix(targetFilePath);
+            }
+            else
+            {
+                // Windows 2000 rejects extended paths here. Retain prefixes
+                // required for exact names or long paths.
+                hardLinkFilePath = PathInternal.EnsureExtendedPrefixIfNeeded(hardLinkFilePath);
+                targetFilePath = PathInternal.EnsureExtendedPrefixIfNeeded(targetFilePath);
+            }
 
             if (!CreateHardLinkPrivate(hardLinkFilePath, targetFilePath, IntPtr.Zero))
             {

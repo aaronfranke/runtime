@@ -184,7 +184,7 @@ namespace Microsoft.Win32.SafeHandles
                             {
                                 try
                                 {
-                                    Interop.Kernel32.CancelIoEx(fileHandle, vts._overlapped);
+                                    fileHandle.TryCancelPendingIo(vts._overlapped);
                                     // Ignore all failures: no matter whether it succeeds or fails, completion is handled via the IOCallback.
                                 }
                                 catch (ObjectDisposedException) { } // in case the SafeHandle is (erroneously) closed concurrently

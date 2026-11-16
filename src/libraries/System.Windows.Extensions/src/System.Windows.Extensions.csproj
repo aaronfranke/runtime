@@ -69,6 +69,8 @@ System.Security.Cryptography.X509Certificates.X509SelectionFlag</PackageDescript
              Link="Common\Interop\Windows\WinMm\Interop.mmioRead.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\WinMm\Interop.mmioOpen.cs"
              Link="Common\Interop\Windows\WinMm\Interop.mmioOpen.cs" />
+    <Compile Include="$(CommonPath)Interop\Windows\WinMm\Interop.LegacyWave.cs"
+             Link="Common\Interop\Windows\WinMm\Interop.LegacyWave.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\WinMm\Interop.PlaySound.cs"
              Link="Common\Interop\Windows\WinMm\Interop.PlaySound.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\Interop.Libraries.cs"

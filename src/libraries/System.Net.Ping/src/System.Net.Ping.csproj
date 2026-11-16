@@ -105,6 +105,8 @@
              Link="Common\Interop\Windows\Interop.Libraries.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\IpHlpApi\Interop.ErrorCodes.cs"
              Link="Common\Interop\Windows\IpHlpApi\Interop.ErrorCodes.cs" />
+    <Compile Include="$(CommonPath)Interop\Windows\IpHlpApi\Interop.ICMP.Legacy.cs"
+             Link="Common\Interop\Windows\IpHlpApi\Interop.ICMP.Legacy.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\IpHlpApi\Interop.ICMP.cs"
              Link="Common\Interop\Windows\IpHlpApi\Interop.ICMP.cs" />
     <Compile Include="$(CommonPath)Interop\Windows\WinSock\Interop.closesocket.cs"

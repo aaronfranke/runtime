@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
 
 internal static partial class Interop
@@ -51,9 +52,44 @@ internal static partial class Interop
         internal const uint SEE_MASK_FLAG_NO_UI = 0x00000400;
 
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        [LibraryImport(Libraries.Shell32, SetLastError = true)]
+        [LibraryImport(Libraries.Shell32, EntryPoint = "ShellExecuteExW", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        internal static unsafe partial bool ShellExecuteExW(
-            SHELLEXECUTEINFO* pExecInfo);
+        private static unsafe partial bool ShellExecuteExWNative(SHELLEXECUTEINFO* info);
+
+        internal static unsafe bool ShellExecuteExW(SHELLEXECUTEINFO* info)
+        {
+            if (OperatingSystem.IsWindowsVersionAtLeast(6, 2))
+            {
+                return ShellExecuteExWNative(info);
+            }
+
+            // Older Windows may lack the DLL search flags used by the normal import.
+            if (!NativeLibrary.TryLoad(Path.Combine(Environment.SystemDirectory, Libraries.Shell32), out nint shell))
+            {
+                Marshal.SetLastPInvokeError(Errors.ERROR_DLL_NOT_FOUND);
+                return false;
+            }
+
+            int lastError = 0;
+            try
+            {
+                if (!NativeLibrary.TryGetExport(shell, "ShellExecuteExW", out nint address))
+                {
+                    lastError = Errors.ERROR_CALL_NOT_IMPLEMENTED;
+                    return false;
+                }
+
+                var shellExecute = (delegate* unmanaged[Stdcall]<SHELLEXECUTEINFO*, int>)address;
+                Marshal.SetLastSystemError(0);
+                bool result = shellExecute(info) != 0;
+                lastError = Marshal.GetLastSystemError();
+                return result;
+            }
+            finally
+            {
+                NativeLibrary.Free(shell);
+                Marshal.SetLastPInvokeError(lastError);
+            }
+        }
     }
 }

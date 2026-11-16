@@ -209,6 +209,12 @@ namespace System.Security.Principal
                 throw new ArgumentException(SR.Arg_EmptyCollection, nameof(sourceAccounts));
             }
 
+            if (!OperatingSystem.IsWindowsVersionAtLeast(5, 1))
+            {
+                // NT 4 and Windows 2000 have LookupAccountNameW but lack LsaLookupNames2.
+                return TranslateToSidsLegacy(sourceAccounts, out someFailed);
+            }
+
             SafeLsaPolicyHandle? LsaHandle = null;
             SafeLsaMemoryHandle? ReferencedDomainsPtr = null;
             SafeLsaMemoryHandle? SidsPtr = null;
@@ -311,20 +317,14 @@ namespace System.Security.Principal
                         // Only some names are recognized as NTAccount objects
                         //
 
-                        switch ((SidNameUse)Lts.Use)
+                        if (IsMappedAccount((SidNameUse)Lts.Use))
                         {
-                            case SidNameUse.User:
-                            case SidNameUse.Group:
-                            case SidNameUse.Alias:
-                            case SidNameUse.Computer:
-                            case SidNameUse.WellKnownGroup:
-                                Result.Add(new SecurityIdentifier(Lts.Sid));
-                                break;
-
-                            default:
-                                someFailed = true;
-                                Result.Add(sourceAccounts[i]);
-                                break;
+                            Result.Add(new SecurityIdentifier(Lts.Sid));
+                        }
+                        else
+                        {
+                            someFailed = true;
+                            Result.Add(sourceAccounts[i]);
                         }
                     }
                 }
@@ -345,6 +345,77 @@ namespace System.Security.Principal
                 SidsPtr?.Dispose();
             }
         }
+
+        private static IdentityReferenceCollection TranslateToSidsLegacy(IdentityReferenceCollection sourceAccounts, out bool someFailed)
+        {
+            someFailed = false;
+            IdentityReferenceCollection result = new(sourceAccounts.Count);
+            byte[] sidBuffer = new byte[SecurityIdentifier.MaxBinaryLength];
+            char[] domainBuffer = new char[MaximumDomainNameLength + 1];
+
+            foreach (IdentityReference identity in sourceAccounts)
+            {
+                if (identity is not NTAccount account)
+                {
+                    throw new ArgumentException(SR.Argument_ImproperType, nameof(sourceAccounts));
+                }
+
+                SecurityIdentifier? sid = LookupAccountSid(account._name, sidBuffer, ref domainBuffer);
+                if (sid is null)
+                {
+                    someFailed = true;
+                    result.Add(account);
+                }
+                else
+                {
+                    result.Add(sid);
+                }
+            }
+
+            return result;
+        }
+
+        private static SecurityIdentifier? LookupAccountSid(string name, byte[] sidBuffer, ref char[] domainBuffer)
+        {
+            // LookupAccountNameW takes a null-terminated name. Keep a name with an
+            // embedded null from resolving to a different account.
+            if (name.Contains('\0'))
+            {
+                return null;
+            }
+
+            while (true)
+            {
+                uint sidLength = (uint)sidBuffer.Length;
+                uint domainLength = (uint)domainBuffer.Length;
+                if (Interop.Advapi32.LookupAccountNameW(null, ref MemoryMarshal.GetReference(name.AsSpan()),
+                    ref sidBuffer[0], ref sidLength, ref domainBuffer[0], ref domainLength, out uint use))
+                {
+                    return IsMappedAccount((SidNameUse)use) ? new SecurityIdentifier(sidBuffer, 0) : null;
+                }
+
+                int error = Marshal.GetLastPInvokeError();
+                switch (error)
+                {
+                    case Interop.Errors.ERROR_INSUFFICIENT_BUFFER when domainLength > domainBuffer.Length:
+                        domainBuffer = new char[domainLength];
+                        break;
+                    case Interop.Errors.ERROR_NONE_MAPPED:
+                        return null;
+                    case Interop.Errors.ERROR_ACCESS_DENIED:
+                        throw new UnauthorizedAccessException();
+                    case Interop.Errors.ERROR_NOT_ENOUGH_MEMORY:
+                    case Interop.Errors.ERROR_OUTOFMEMORY:
+                    case Interop.Errors.ERROR_NO_SYSTEM_RESOURCES:
+                        throw new OutOfMemoryException();
+                    default:
+                        throw new Win32Exception(error);
+                }
+            }
+        }
+
+        private static bool IsMappedAccount(SidNameUse use) =>
+            use is SidNameUse.User or SidNameUse.Group or SidNameUse.Alias or SidNameUse.Computer or SidNameUse.WellKnownGroup;
         #endregion
     }
 }

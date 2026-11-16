@@ -15,32 +15,7 @@ namespace System.Net
 {
     internal static partial class NameResolutionPal
     {
-        private static NullableBool s_getAddrInfoExSupported;
-
-        public static bool SupportsGetAddrInfoAsync
-        {
-            get
-            {
-                if (s_getAddrInfoExSupported == NullableBool.Undefined)
-                {
-                    Initialize();
-                }
-                return s_getAddrInfoExSupported == NullableBool.True;
-
-                static void Initialize()
-                {
-                    Interop.Winsock.EnsureInitialized();
-
-                    IntPtr libHandle = Interop.Kernel32.LoadLibraryEx(Interop.Libraries.Ws2_32, IntPtr.Zero, Interop.Kernel32.LOAD_LIBRARY_SEARCH_SYSTEM32);
-                    Debug.Assert(libHandle != IntPtr.Zero);
-
-                    // We can't just check that 'GetAddrInfoEx' exists, because it existed before supporting overlapped.
-                    // The existence of 'GetAddrInfoExCancel' indicates that overlapped is supported.
-                    bool supported = NativeLibrary.TryGetExport(libHandle, Interop.Winsock.GetAddrInfoExCancelFunctionName, out _);
-                    s_getAddrInfoExSupported = supported ? NullableBool.True : NullableBool.False;
-                }
-            }
-        }
+        public static bool SupportsGetAddrInfoAsync => WinsockResolverSupport.AddrInfoEx;
 
         public const bool SupportsGetNameInfo = true;
 
@@ -49,6 +24,10 @@ namespace System.Net
             Interop.Winsock.EnsureInitialized();
 
             aliases = Array.Empty<string>();
+            if (!WinsockResolverSupport.AddrInfo)
+            {
+                return GetLegacyAddressInfo(name, justAddresses, addressFamily, out hostName, out addresses, out nativeErrorCode);
+            }
 
             var hints = new Interop.Winsock.AddressInfo { ai_family = addressFamily };
             if (!justAddresses)
@@ -84,6 +63,11 @@ namespace System.Net
         public static unsafe string? TryGetNameInfo(IPAddress addr, out SocketError errorCode, out int nativeErrorCode)
         {
             Interop.Winsock.EnsureInitialized();
+
+            if (!WinsockResolverSupport.NameInfo)
+            {
+                return GetLegacyNameInfo(addr, out errorCode, out nativeErrorCode);
+            }
 
             SocketAddress address = new IPEndPoint(addr, 0).Serialize();
             Span<byte> addressBuffer = (uint)address.Size <= 64 ? stackalloc byte[64] : new byte[address.Size];

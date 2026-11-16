@@ -82,6 +82,8 @@
     <Compile Include="System\Net\NetworkInformation\SystemIPv6InterfaceProperties.cs" />
     <Compile Include="System\Net\NetworkInformation\SystemMulticastIPAddressInformation.cs" />
     <Compile Include="System\Net\NetworkInformation\SystemNetworkInterface.cs" />
+    <Compile Include="System\Net\NetworkInformation\SystemNetworkInterface.LegacyWindows.cs" />
+    <Compile Include="System\Net\NetworkInformation\SystemNetworkInterface.LegacyWindowsAdapters.cs" />
     <Compile Include="System\Net\NetworkInformation\SystemTcpConnection.cs" />
     <Compile Include="System\Net\NetworkInformation\SystemTcpStatistics.cs" />
     <Compile Include="System\Net\NetworkInformation\SystemUdpStatistics.cs" />
@@ -220,6 +222,7 @@
     <ProjectReference Include="$(LibrariesProjectRoot)System.Collections\src\System.Collections.csproj" />
     <ProjectReference Include="$(LibrariesProjectRoot)System.Diagnostics.Tracing\src\System.Diagnostics.Tracing.csproj" />
     <ProjectReference Include="$(LibrariesProjectRoot)System.Memory\src\System.Memory.csproj" />
+    <ProjectReference Include="$(LibrariesProjectRoot)System.Net.NameResolution\src\System.Net.NameResolution.csproj" Condition="'$(TargetPlatformIdentifier)' == 'windows'" />
     <ProjectReference Include="$(LibrariesProjectRoot)System.Net.Primitives\src\System.Net.Primitives.csproj" />
     <ProjectReference Include="$(LibrariesProjectRoot)System.Net.Sockets\src\System.Net.Sockets.csproj" />
     <ProjectReference Include="$(LibrariesProjectRoot)System.Runtime\src\System.Runtime.csproj" />

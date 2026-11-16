@@ -10,8 +10,8 @@ namespace System.Net.Http
         {
             if (!HttpEnvironmentProxy.TryCreate(out IWebProxy? proxy))
             {
-                // We create instance even if there is currently no proxy as that can change during application run.
-                proxy = new HttpWindowsProxy();
+                // Modern Windows monitors settings; legacy Windows reads an initialization snapshot.
+                proxy = OperatingSystem.IsWindowsVersionAtLeast(6) ? new HttpWindowsProxy() : ConstructLegacyWindowsProxy();
             }
 
             return proxy;
