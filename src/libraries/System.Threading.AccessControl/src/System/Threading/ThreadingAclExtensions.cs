@@ -11,6 +11,15 @@ namespace System.Threading
 {
     public static class ThreadingAclExtensions
     {
+        internal static void ThrowIfWin9xSecurityUnsupported()
+        {
+            // Win9x has named wait handles but cannot enforce ACLs or restricted access masks.
+            if (Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                throw new PlatformNotSupportedException(SR.PlatformNotSupported_AccessControl);
+            }
+        }
+
         public static EventWaitHandleSecurity GetAccessControl(this EventWaitHandle handle)
         {
             return new EventWaitHandleSecurity(handle.GetSafeWaitHandle(), AccessControlSections.Access | AccessControlSections.Owner | AccessControlSections.Group);

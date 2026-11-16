@@ -273,6 +273,12 @@
   <data name="ProcessStartSingleFeatureNotSupported" xml:space="preserve">
     <value>The {0} property is not supported on this platform.</value>
   </data>
+  <data name="ProcessThreadTimesNotSupported" xml:space="preserve">
+    <value>This version of Windows does not provide process or thread timing information.</value>
+  </data>
+  <data name="SynchronousProcessCaptureNotSupported" xml:space="preserve">
+    <value>Synchronous process output capture is not supported on this version of Windows. Use asynchronous output capture instead.</value>
+  </data>
   <data name="Process_PlatformNotSupported" xml:space="preserve">
     <value>System.Diagnostics.Process is not supported on this platform.</value>
   </data>

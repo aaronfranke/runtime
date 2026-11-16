@@ -40,7 +40,8 @@ namespace System.Net.NetworkInformation
         {
             if (!OperatingSystem.IsWindowsVersionAtLeast(5) && address.AddressFamily == AddressFamily.InterNetwork)
             {
-                // NT 4 can lack IcmpSendEcho2. Run its synchronous provider on a worker.
+                // Windows 95's ICMP provider can perform IcmpSendEcho2 synchronously without signaling
+                // the event. Windows 98 and NT 4 can lack that export altogether.
                 byte[] request = (byte[])buffer.Clone();
                 PingOptions? requestOptions = options == null ? null : new PingOptions(options.Ttl, options.DontFragment);
                 return Task.Run(() =>

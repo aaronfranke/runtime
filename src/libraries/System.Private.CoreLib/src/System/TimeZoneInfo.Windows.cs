@@ -20,6 +20,7 @@ namespace System
         // registry constants for the 'Time Zones' hive
         //
         private const string TimeZonesRegistryHive = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Time Zones";
+        private const string Win9xTimeZonesRegistryHive = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Time Zones";
         private const string DisplayValue = "Display";
         private const string DaylightValue = "Dlt";
         private const string StandardValue = "Std";
@@ -69,6 +70,28 @@ namespace System
             return null;
         }
 
+        private static RegistryKey? OpenTimeZonesRegistryKey(string suffix = "")
+        {
+            RegistryKey? key = Registry.LocalMachine.OpenSubKey(TimeZonesRegistryHive + suffix, writable: false);
+            if (key != null)
+            {
+                return key;
+            }
+
+            // Windows 95 and 98 store their zones under Windows instead of Windows NT.
+            // If the NT database exists, keep missing zones and rules missing.
+            if (suffix.Length != 0)
+            {
+                using RegistryKey? ntDatabase = Registry.LocalMachine.OpenSubKey(TimeZonesRegistryHive, writable: false);
+                if (ntDatabase != null)
+                {
+                    return null;
+                }
+            }
+
+            return Registry.LocalMachine.OpenSubKey(Win9xTimeZonesRegistryHive + suffix, writable: false);
+        }
+
         private static Dictionary<string, TimeZoneInfo> PopulateAllSystemTimeZones(CachedData cachedData)
         {
             Debug.Assert(Monitor.IsEntered(cachedData));
@@ -81,7 +104,7 @@ namespace System
 
             if (!Invariant)
             {
-                using (RegistryKey? reg = Registry.LocalMachine.OpenSubKey(TimeZonesRegistryHive, writable: false))
+                using (RegistryKey? reg = OpenTimeZonesRegistryKey())
                 {
                     if (reg != null)
                     {
@@ -205,7 +228,7 @@ namespace System
 
             dstDisabled = false;
 
-            using (RegistryKey? key = Registry.LocalMachine.OpenSubKey(TimeZonesRegistryHive, writable: false))
+            using (RegistryKey? key = OpenTimeZonesRegistryKey())
             {
                 if (key == null)
                 {
@@ -474,7 +497,7 @@ namespace System
                 // * "<year2>"    REG_BINARY REG_TZI_FORMAT
                 // * "<year3>"    REG_BINARY REG_TZI_FORMAT
                 //
-                using (RegistryKey? dynamicKey = Registry.LocalMachine.OpenSubKey(TimeZonesRegistryHive + "\\" + id + "\\Dynamic DST", writable: false))
+                using (RegistryKey? dynamicKey = OpenTimeZonesRegistryKey("\\" + id + "\\Dynamic DST"))
                 {
                     if (dynamicKey == null)
                     {
@@ -624,7 +647,7 @@ namespace System
         {
             dstDisabled = false;
 
-            using (RegistryKey? key = Registry.LocalMachine.OpenSubKey(TimeZonesRegistryHive + "\\" + id, writable: false))
+            using (RegistryKey? key = OpenTimeZonesRegistryKey("\\" + id))
             {
                 if (key == null)
                 {
@@ -858,7 +881,7 @@ namespace System
             //                       add "%windir%\system32\" after "@"
             // * TZI,         REG_BINARY REG_TZI_FORMAT
             //
-            using (RegistryKey? key = Registry.LocalMachine.OpenSubKey(TimeZonesRegistryHive + "\\" + id, writable: false))
+            using (RegistryKey? key = OpenTimeZonesRegistryKey("\\" + id))
             {
                 if (key == null)
                 {
@@ -926,7 +949,7 @@ namespace System
 
             // Try to get a localized version of "Coordinated Universal Time" from the globalization data
             string? standardDisplayName = null;
-            using (RegistryKey? key = Registry.LocalMachine.OpenSubKey(TimeZonesRegistryHive + "\\" + UtcId, writable: false))
+            using (RegistryKey? key = OpenTimeZonesRegistryKey("\\" + UtcId))
             {
                 if (key != null)
                 {

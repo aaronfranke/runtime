@@ -20,7 +20,7 @@ internal static partial class Interop
             IntPtr hToken,
             out string ppszPath);
 
-        internal static string? GetLegacyFolderPath(int folder, int flags)
+        internal static string? GetLegacyFolderPath(int folder, int flags, bool ansi)
         {
             string systemDirectory = Environment.SystemDirectory;
             if (!NativeLibrary.TryLoad(Path.Combine(systemDirectory, Libraries.Shell32), out nint shell))
@@ -30,7 +30,8 @@ internal static partial class Interop
 
             try
             {
-                if (TryGetLegacyFolderPath(shell, folder | flags, out string? path))
+                string entryPoint = ansi ? "SHGetFolderPathA" : "SHGetFolderPathW";
+                if (TryGetLegacyFolderPath(shell, entryPoint, folder | flags, ansi, out string? path))
                 {
                     return path;
                 }
@@ -40,7 +41,7 @@ internal static partial class Interop
                 {
                     try
                     {
-                        if (TryGetLegacyFolderPath(shfolder, folder | flags, out path))
+                        if (TryGetLegacyFolderPath(shfolder, entryPoint, folder | flags, ansi, out path))
                         {
                             return path;
                         }
@@ -51,10 +52,10 @@ internal static partial class Interop
                     }
                 }
 
-                // The original NT 4 shell only exposes the item-list API.
+                // The original Windows 95 and NT 4 shells only expose the item-list API.
                 // It can resolve existing folders without supporting an unverified path.
                 const int CSIDL_FLAG_CREATE = 0x8000;
-                return GetLegacyFolderPathFromIdList(shell, folder | (flags & CSIDL_FLAG_CREATE));
+                return GetLegacyFolderPathFromIdList(shell, folder | (flags & CSIDL_FLAG_CREATE), ansi);
             }
             finally
             {
@@ -62,10 +63,10 @@ internal static partial class Interop
             }
         }
 
-        private static unsafe bool TryGetLegacyFolderPath(nint library, int csidl, out string? path)
+        private static unsafe bool TryGetLegacyFolderPath(nint library, string entryPoint, int csidl, bool ansi, out string? path)
         {
             path = null;
-            if (!NativeLibrary.TryGetExport(library, "SHGetFolderPathW", out nint address))
+            if (!NativeLibrary.TryGetExport(library, entryPoint, out nint address))
             {
                 return false;
             }
@@ -74,15 +75,16 @@ internal static partial class Interop
             var getPath = (delegate* unmanaged[Stdcall]<nint, int, nint, uint, void*, int>)address;
             if (getPath(0, csidl, 0, 0, buffer) == 0)
             {
-                path = new string(buffer);
+                path = ReadLegacyPath(buffer, ansi);
             }
             return true;
         }
 
-        private static unsafe string? GetLegacyFolderPathFromIdList(nint shell, int csidl)
+        private static unsafe string? GetLegacyFolderPathFromIdList(nint shell, int csidl, bool ansi)
         {
+            string pathEntryPoint = ansi ? "SHGetPathFromIDListA" : "SHGetPathFromIDListW";
             if (!NativeLibrary.TryGetExport(shell, "SHGetSpecialFolderLocation", out nint locationAddress) ||
-                !NativeLibrary.TryGetExport(shell, "SHGetPathFromIDListW", out nint pathAddress) ||
+                !NativeLibrary.TryGetExport(shell, pathEntryPoint, out nint pathAddress) ||
                 !NativeLibrary.TryGetExport(shell, "SHGetMalloc", out nint mallocAddress))
             {
                 return null;
@@ -106,7 +108,7 @@ internal static partial class Interop
             {
                 char* buffer = stackalloc char[Kernel32.MAX_PATH];
                 return getLocation(0, csidl, &itemList) == 0 && itemList != 0 && getPath(itemList, buffer) != 0
-                    ? new string(buffer)
+                    ? ReadLegacyPath(buffer, ansi)
                     : null;
             }
             finally
@@ -118,6 +120,9 @@ internal static partial class Interop
                 release(allocator);
             }
         }
+
+        private static unsafe string? ReadLegacyPath(char* buffer, bool ansi) =>
+            ansi ? Marshal.PtrToStringAnsi((nint)buffer) : new string(buffer);
 
         // https://msdn.microsoft.com/en-us/library/windows/desktop/dd378457.aspx
         internal static class KnownFolders

@@ -129,7 +129,7 @@ namespace System.Net.Sockets
         private unsafe bool TryUnblockSocket(bool _ /*abortive*/)
         {
             // Try to cancel all pending IO.
-            // NT 4/5 lack CancelIoEx, so cross-thread disposal cannot
+            // Win9x and NT 4/5 lack CancelIoEx, so cross-thread disposal cannot
             // use this path to abort a blocking socket call on those systems.
             return Interop.Kernel32.CancelIoEx(handle, null);
         }

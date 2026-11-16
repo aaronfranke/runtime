@@ -1,0 +1,48 @@
+# Licensed to the .NET Foundation under one or more agreements.
+# The .NET Foundation licenses this file to you under the MIT license.
+# Native LDAP client exports verified on Windows 98 SE. Bind only used calls.
+# The TLS exports are absent; keep them lazy so they cannot prevent startup.
+wldap32!LdapGetLastError
+wldap32!ber_alloc_t
+wldap32!ber_bvecfree
+wldap32!ber_bvfree
+wldap32!ber_flatten
+wldap32!ber_free
+wldap32!ber_init
+wldap32!ber_printf
+wldap32!ber_scanf
+wldap32!cldap_openW
+wldap32!ldap_abandon
+wldap32!ldap_add_extW
+wldap32!ldap_bind_sW
+wldap32!ldap_compare_extW
+wldap32!ldap_connect
+wldap32!ldap_control_freeW
+wldap32!ldap_controls_freeW
+wldap32!ldap_delete_extW
+wldap32!ldap_extended_operationW
+wldap32!ldap_first_attributeW
+wldap32!ldap_first_entry
+wldap32!ldap_first_reference
+wldap32!ldap_get_dnW
+wldap32!ldap_get_optionW
+wldap32!ldap_get_values_lenW
+wldap32!ldap_initW
+wldap32!ldap_memfreeW
+wldap32!ldap_modify_extW
+wldap32!ldap_msgfree
+wldap32!ldap_next_attributeW
+wldap32!ldap_next_entry
+wldap32!ldap_next_reference
+wldap32!ldap_parse_extended_resultW
+wldap32!ldap_parse_referenceW
+wldap32!ldap_parse_resultW
+wldap32!ldap_rename_extW
+wldap32!ldap_result
+wldap32!ldap_result2error
+wldap32!ldap_search_extW
+wldap32!ldap_set_optionW
+wldap32!ldap_simple_bind_sW
+wldap32!ldap_unbind
+wldap32!ldap_value_freeW
+wldap32!ldap_value_free_len

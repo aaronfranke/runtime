@@ -12,7 +12,7 @@ namespace System.Net
         internal static async ValueTask ConnectAsync(Socket socket, IPAddress[] addresses, int port, CancellationToken cancellationToken)
         {
             // Pre-Vista Windows cannot use ConnectEx with this backend's CancelIoEx
-            // cancellation path. NT 4 also lacks ConnectEx itself. Keep the
+            // cancellation path. NT4 and Win9x also lack ConnectEx itself. Keep the
             // caller's socket, ServicePoint options and explicit local binding.
             bool blocking = socket.Blocking;
             SocketException? lastException = null;

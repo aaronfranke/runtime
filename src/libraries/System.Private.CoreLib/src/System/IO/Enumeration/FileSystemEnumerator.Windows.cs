@@ -11,6 +11,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.ConstrainedExecution;
 using System.Runtime.InteropServices;
 using System.Threading;
+using Microsoft.Win32.SafeHandles;
 
 namespace System.IO.Enumeration
 {
@@ -40,6 +41,17 @@ namespace System.IO.Enumeration
         private bool _lastEntryFound;
         private Queue<(IntPtr Handle, string Path, int RemainingDepth)>? _pending;
         private bool _isFirstGetData = true;
+        private Win32FindState? _win32Find;
+
+        [FeatureSwitchDefinition("System.IO.UseWin32DirectoryEnumeration")]
+        private static bool UseWin32DirectoryEnumeration { get; } =
+            AppContextConfigHelper.GetBooleanConfig("System.IO.UseWin32DirectoryEnumeration", defaultValue: false);
+
+        private sealed class Win32FindState
+        {
+            internal SafeFindHandle? Handle;
+            internal Interop.Kernel32.WIN32_FIND_DATA Data;
+        }
 
         /// <summary>
         /// Encapsulates a find operation.
@@ -93,9 +105,17 @@ namespace System.IO.Enumeration
             {
                 // We need to initialize the directory handle up front to ensure
                 // we immediately throw IO exceptions for missing directory/etc.
-                _directoryHandle = CreateDirectoryHandle(_rootDirectory);
-                if (_directoryHandle == IntPtr.Zero)
-                    _lastEntryFound = true;
+                if (UseWin32DirectoryEnumeration)
+                {
+                    // Win9x cannot open an NT directory handle for NtQueryDirectoryFile.
+                    _win32Find = new Win32FindState();
+                    _lastEntryFound = !OpenWin32Search(_rootDirectory, ignoreNotFound: false);
+                }
+                else
+                {
+                    _directoryHandle = CreateDirectoryHandle(_rootDirectory);
+                    _lastEntryFound = _directoryHandle == IntPtr.Zero;
+                }
             }
 
             _currentPath = _rootDirectory;
@@ -126,6 +146,11 @@ namespace System.IO.Enumeration
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool GetData()
         {
+            if (_win32Find is Win32FindState find)
+            {
+                return GetWin32Data(find);
+            }
+
             Debug.Assert(_directoryHandle != (IntPtr)(-1) && _directoryHandle != IntPtr.Zero && !_lastEntryFound);
 
             Interop.NtDll.IO_STATUS_BLOCK statusBlock;
@@ -200,6 +225,70 @@ namespace System.IO.Enumeration
             }
         }
 
+        private bool OpenWin32Search(string path, bool ignoreNotFound)
+        {
+            Win32FindState find = _win32Find!;
+            // The existing managed predicates apply the requested filter and recursion rules.
+            SafeFindHandle handle = Interop.Kernel32.FindFirstFile(Path.Join(path, "*"), ref find.Data);
+            if (!handle.IsInvalid)
+            {
+                find.Handle = handle;
+                return true;
+            }
+
+            int error = Marshal.GetLastPInvokeError();
+            handle.Dispose();
+
+            // Some filesystems report no first result for an existing empty directory.
+            if (error == Interop.Errors.ERROR_FILE_NOT_FOUND && FileSystem.DirectoryExists(path))
+            {
+                return true;
+            }
+
+            if (ContinueOnDirectoryError(error, ignoreNotFound))
+            {
+                return false;
+            }
+
+            throw Win32Marshal.GetExceptionForWin32Error(
+                error == Interop.Errors.ERROR_FILE_NOT_FOUND ? Interop.Errors.ERROR_PATH_NOT_FOUND : error, path);
+        }
+
+        private bool GetWin32Data(Win32FindState find)
+        {
+            SafeFindHandle? handle = find.Handle;
+            if (handle is null)
+            {
+                DirectoryFinished();
+                return false;
+            }
+
+            if (!_isFirstGetData && !Interop.Kernel32.FindNextFile(handle, ref find.Data))
+            {
+                int error = Marshal.GetLastPInvokeError();
+                if (error != Interop.Errors.ERROR_NO_MORE_FILES && !ContinueOnDirectoryError(error, ignoreNotFound: false))
+                {
+                    throw Win32Marshal.GetExceptionForWin32Error(error, _currentPath);
+                }
+
+                DirectoryFinished();
+                return false;
+            }
+
+            _isFirstGetData = false;
+            ref Interop.Kernel32.WIN32_FIND_DATA data = ref find.Data;
+            Interop.NtDll.FILE_FULL_DIR_INFORMATION* entry = (Interop.NtDll.FILE_FULL_DIR_INFORMATION*)_buffer;
+            *entry = default;
+            entry->FileAttributes = (FileAttributes)data.dwFileAttributes;
+            entry->CreationTime.TicksSince1601 = data.ftCreationTime.ToTicks();
+            entry->LastAccessTime.TicksSince1601 = data.ftLastAccessTime.ToTicks();
+            entry->LastWriteTime.TicksSince1601 = data.ftLastWriteTime.ToTicks();
+            entry->EndOfFile = ((long)data.nFileSizeHigh << 32) | data.nFileSizeLow;
+            entry->EaSize = data.dwReserved0;
+            entry->SetFileNameInBuffer(data.cFileName.Slice(0, data.cFileName.IndexOf('\0')));
+            return true;
+        }
+
         private IntPtr CreateRelativeDirectoryHandle(ReadOnlySpan<char> relativePath, string fullPath)
         {
             (uint status, IntPtr handle) = Interop.NtDll.CreateFile(
@@ -232,6 +321,13 @@ namespace System.IO.Enumeration
 
         private void CloseDirectoryHandle()
         {
+            if (_win32Find is Win32FindState find)
+            {
+                find.Handle?.Dispose();
+                find.Handle = null;
+                return;
+            }
+
             // As handles can be reused we want to be extra careful to close handles only once
             IntPtr handle = Interlocked.Exchange(ref _directoryHandle, IntPtr.Zero);
             if (handle != IntPtr.Zero)
@@ -322,8 +418,11 @@ namespace System.IO.Enumeration
                         {
                             // Recursion is on and the directory was accepted, Queue it
                             string subDirectory = Path.Join(_currentPath.AsSpan(), _entry->FileName);
-                            IntPtr subDirectoryHandle = CreateRelativeDirectoryHandle(_entry->FileName, subDirectory);
-                            if (subDirectoryHandle != IntPtr.Zero)
+                            // FindFirstFile needs a path, so Win9x opens each search when it is dequeued.
+                            IntPtr subDirectoryHandle = _win32Find is null
+                                ? CreateRelativeDirectoryHandle(_entry->FileName, subDirectory)
+                                : IntPtr.Zero;
+                            if (subDirectoryHandle != IntPtr.Zero || _win32Find is not null)
                             {
                                 try
                                 {
@@ -333,7 +432,10 @@ namespace System.IO.Enumeration
                                 catch
                                 {
                                     // Couldn't queue the handle, close it and rethrow
-                                    Interop.Kernel32.CloseHandle(subDirectoryHandle);
+                                    if (subDirectoryHandle != IntPtr.Zero)
+                                    {
+                                        Interop.Kernel32.CloseHandle(subDirectoryHandle);
+                                    }
                                     throw;
                                 }
                             }
@@ -362,12 +464,17 @@ namespace System.IO.Enumeration
 
         private bool DequeueNextDirectory()
         {
-            if (_pending == null || _pending.Count == 0)
-                return false;
+            while (_pending is { Count: > 0 })
+            {
+                (_directoryHandle, _currentPath, _remainingRecursionDepth) = _pending.Dequeue();
+                _isFirstGetData = true;
+                if (_win32Find is null || OpenWin32Search(_currentPath, ignoreNotFound: true))
+                {
+                    return true;
+                }
+            }
 
-            (_directoryHandle, _currentPath, _remainingRecursionDepth) = _pending.Dequeue();
-            _isFirstGetData = true;
-            return true;
+            return false;
         }
 
         private void InternalDispose(bool disposing)
@@ -384,7 +491,13 @@ namespace System.IO.Enumeration
                     if (_pending != null)
                     {
                         while (_pending.Count > 0)
-                            Interop.Kernel32.CloseHandle(_pending.Dequeue().Handle);
+                        {
+                            IntPtr handle = _pending.Dequeue().Handle;
+                            if (handle != IntPtr.Zero)
+                            {
+                                Interop.Kernel32.CloseHandle(handle);
+                            }
+                        }
                         _pending = null;
                     }
 

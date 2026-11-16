@@ -24,7 +24,7 @@ internal static partial class Interop
         private static bool InitHttpApi(HTTPAPI_VERSION version)
         {
             // HTTP Server API v2 requires NT 6. NT 5's v1 provider is insufficient;
-            // NT 4 and Windows 2000 can lack httpapi.dll entirely.
+            // NT 4, Windows 2000, and Win9x can lack httpapi.dll entirely.
             if (!OperatingSystem.IsWindowsVersionAtLeast(6))
             {
                 return false;

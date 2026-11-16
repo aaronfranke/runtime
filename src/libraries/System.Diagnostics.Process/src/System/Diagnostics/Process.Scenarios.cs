@@ -238,6 +238,13 @@ namespace System.Diagnostics
             ThrowIfUseShellExecute(startInfo, nameof(RunAndCaptureText));
             ThrowIfNotRedirected(startInfo, nameof(RunAndCaptureText));
 
+            if (OperatingSystem.IsWindows() && Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                // Win9x cannot perform the overlapped pipe reads used below. Reject before
+                // starting a child that error cleanup would immediately terminate.
+                throw new PlatformNotSupportedException(SR.SynchronousProcessCaptureNotSupported);
+            }
+
             long startTimestamp = Stopwatch.GetTimestamp();
 
             using Process process = Start(startInfo)!;

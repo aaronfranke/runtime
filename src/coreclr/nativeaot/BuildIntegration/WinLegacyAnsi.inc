@@ -30,7 +30,7 @@ THUNK(int, WideCharToMultiByte, 32, (UINT code_page, DWORD flags, const wchar_t 
         return 0;
     }
 
-    /* Windows NT 4 rejects WC_NO_BEST_FIT_CHARS. Keep only conversions that
+    /* Windows 95 and NT 4 reject WC_NO_BEST_FIT_CHARS. Keep only conversions that
        round-trip exactly, using the system default for each unmappable code unit. */
     int replacement_length = info.DefaultChar[1] == 0 ? 1 : 2;
     BOOL replaced = FALSE;

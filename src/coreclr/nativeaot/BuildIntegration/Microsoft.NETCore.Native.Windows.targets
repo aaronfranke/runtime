@@ -291,6 +291,8 @@ int wmain(int argc, unsigned short** argv)
         ResourceFile="%(_AggregateExecutableReferencePath.ShimResourceFile)" />
   </Target>
 
+  <Import Project="$(MSBuildThisFileDirectory)Win95.targets" Condition="'$(LegacyWindowsProfile)' == 'win_95'" />
+  <Import Project="$(MSBuildThisFileDirectory)Win98.targets" Condition="'$(LegacyWindowsProfile)' == 'win_98'" />
   <Import Project="$(MSBuildThisFileDirectory)WinNt4.targets" Condition="'$(LegacyWindowsProfile)' == 'win_nt4'" />
   <Import Project="$(MSBuildThisFileDirectory)WinNt5.targets" Condition="'$(LegacyWindowsProfile)' == 'win_nt5'" />
   <Import Project="$(MSBuildThisFileDirectory)WinNt6.targets" Condition="'$(LegacyWindowsProfile)' == 'win_nt6'" />

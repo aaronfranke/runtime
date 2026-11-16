@@ -1,0 +1,42 @@
+# Licensed to the .NET Foundation under one or more agreements.
+# The .NET Foundation licenses this file to you under the MIT license.
+# ODBC 3 manager exports verified on Windows 98 SE. Bind only used calls.
+# Win9x cannot lazily load this module with the restricted System32 policy.
+odbc32!SQLAllocHandle
+odbc32!SQLBindCol
+odbc32!SQLBindParameter
+odbc32!SQLCancel
+odbc32!SQLCloseCursor
+odbc32!SQLColAttributeW
+odbc32!SQLColumnsW
+odbc32!SQLDisconnect
+odbc32!SQLDriverConnectW
+odbc32!SQLEndTran
+odbc32!SQLExecDirectW
+odbc32!SQLExecute
+odbc32!SQLFetch
+odbc32!SQLFreeHandle
+odbc32!SQLFreeStmt
+odbc32!SQLGetConnectAttrW
+odbc32!SQLGetData
+odbc32!SQLGetDescFieldW
+odbc32!SQLGetDiagFieldW
+odbc32!SQLGetDiagRecW
+odbc32!SQLGetFunctions
+odbc32!SQLGetInfoW
+odbc32!SQLGetStmtAttrW
+odbc32!SQLGetTypeInfo
+odbc32!SQLMoreResults
+odbc32!SQLNumResultCols
+odbc32!SQLPrepareW
+odbc32!SQLPrimaryKeysW
+odbc32!SQLProcedureColumnsW
+odbc32!SQLProceduresW
+odbc32!SQLRowCount
+odbc32!SQLSetConnectAttrW
+odbc32!SQLSetDescFieldW
+odbc32!SQLSetEnvAttr
+odbc32!SQLSetStmtAttrW
+odbc32!SQLSpecialColumnsW
+odbc32!SQLStatisticsW
+odbc32!SQLTablesW

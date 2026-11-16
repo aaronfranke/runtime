@@ -10,7 +10,13 @@ namespace System.IO
 {
     public static unsafe partial class Path
     {
-        private static volatile delegate* unmanaged<int, char*, uint> s_GetTempPathWFunc;
+        private static class TempPathApi
+        {
+            internal static readonly delegate* unmanaged<int, char*, uint> GetTempPath2W = FindGetTempPath2W();
+        }
+
+        [LibraryImport(Interop.Libraries.Kernel32, EntryPoint = "GetTempPathW", SetLastError = true)]
+        private static partial uint GetLegacyTempPathW(int bufferLen, char* buffer);
 
         public static char[] GetInvalidFileNameChars() =>
         [
@@ -154,16 +160,13 @@ namespace System.IO
             return path;
         }
 
-        private static delegate* unmanaged<int, char*, uint> GetGetTempPathWFunc()
+        private static delegate* unmanaged<int, char*, uint> FindGetTempPath2W()
         {
             IntPtr kernel32 = Interop.Kernel32.LoadLibraryEx(Interop.Libraries.Kernel32, 0, Interop.Kernel32.LOAD_LIBRARY_SEARCH_SYSTEM32);
 
-            if (!NativeLibrary.TryGetExport(kernel32, "GetTempPath2W", out IntPtr func))
-            {
-                func = NativeLibrary.GetExport(kernel32, "GetTempPathW");
-            }
-
-            return (delegate* unmanaged<int, char*, uint>)func;
+            return kernel32 != IntPtr.Zero && NativeLibrary.TryGetExport(kernel32, "GetTempPath2W", out IntPtr func)
+                ? (delegate* unmanaged<int, char*, uint>)func
+                : null;
         }
 
         internal static void GetTempPath(ref ValueStringBuilder builder)
@@ -182,18 +185,17 @@ namespace System.IO
 
             static uint GetTempPathW(int bufferLen, ref char buffer)
             {
-                delegate* unmanaged<int, char*, uint> func = s_GetTempPathWFunc;
-#pragma warning disable IDE0074 // Use compound assignment
-                if (func == null)
-                {
-                    func = s_GetTempPathWFunc = GetGetTempPathWFunc();
-                }
-#pragma warning restore IDE0074
-
+                delegate* unmanaged<int, char*, uint> func = TempPathApi.GetTempPath2W;
                 int lastError;
                 uint retVal;
                 fixed (char* ptr = &buffer)
                 {
+                    // The direct import allows the Win9x AOT profile to supply the ANSI fallback.
+                    if (func == null)
+                    {
+                        return GetLegacyTempPathW(bufferLen, ptr);
+                    }
+
                     Marshal.SetLastSystemError(0);
                     retVal = func(bufferLen, ptr);
                     lastError = Marshal.GetLastSystemError();

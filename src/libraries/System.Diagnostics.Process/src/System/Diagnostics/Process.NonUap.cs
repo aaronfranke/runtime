@@ -42,6 +42,10 @@ namespace System.Diagnostics
             try
             {
                 var descendantProcesses = new Queue<Process>();
+#if TARGET_WINDOWS
+                // Tool Help has no creation timestamps on Win95 to rule out stale parent IDs.
+                HashSet<int>? visited = ProcessManager.UseToolhelpSnapshot ? new HashSet<int> { Id } : null;
+#endif
                 Process? current = this;
 
                 do
@@ -51,6 +55,12 @@ namespace System.Diagnostics
                         if (processOfInterest.Equals(candidate))
                             return true;
 
+#if TARGET_WINDOWS
+                        if (visited?.Add(candidate.Id) == false)
+                        {
+                            continue;
+                        }
+#endif
                         descendantProcesses.Enqueue(candidate);
                     }
                 } while (descendantProcesses.TryDequeue(out current));

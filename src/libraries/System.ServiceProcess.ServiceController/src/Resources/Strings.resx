@@ -96,6 +96,9 @@
   <data name="PlatformNotSupported_ServiceController" xml:space="preserve">
     <value>ServiceController enables manipulating and accessing Windows services and it is not applicable for other operating systems.</value>
   </data>
+  <data name="PlatformNotSupported_ServiceControllerOnWin9x" xml:space="preserve">
+    <value>The Windows Service Control Manager is unavailable on Windows 95 and Windows 98.</value>
+  </data>
   <data name="CannotChangeProperties" xml:space="preserve">
     <value>Cannot change CanStop, CanPauseAndContinue, CanShutdown, CanHandlePowerEvent, or CanHandleSessionChangeEvent property values after the service has been started.</value>
   </data>

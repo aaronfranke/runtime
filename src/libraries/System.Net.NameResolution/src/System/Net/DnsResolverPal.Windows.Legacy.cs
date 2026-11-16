@@ -23,8 +23,8 @@ namespace System.Net
         private static unsafe DnsQueryRawResult DnsQueryLegacySync(IPEndPoint[] servers, string name,
             ushort queryType, CancellationToken cancellationToken)
         {
-            // NT 4 lacks this provider. Ordinary Winsock name lookup remains separate.
-            if (!OperatingSystem.IsWindowsVersionAtLeast(5))
+            // NT 4 and Win9x lack this provider. Ordinary Winsock name lookup remains separate.
+            if (Environment.OSVersion.Platform != PlatformID.Win32NT || !OperatingSystem.IsWindowsVersionAtLeast(5))
             {
                 throw new PlatformNotSupportedException();
             }

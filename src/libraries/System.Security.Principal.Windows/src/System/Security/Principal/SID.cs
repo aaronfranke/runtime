@@ -491,7 +491,7 @@ namespace System.Security.Principal
 
             if (!OperatingSystem.IsWindowsVersionAtLeast(5))
             {
-                // NT 4 lacks ConvertStringSidToSidW. Numeric SIDs need no account lookup.
+                // NT 4 and Win9x lack ConvertStringSidToSidW. Numeric SIDs need no account lookup.
                 if (!TryCreateFromNumericString(sddlForm))
                 {
                     throw new ArgumentException(SR.Argument_InvalidValue, nameof(sddlForm));

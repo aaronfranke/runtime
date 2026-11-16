@@ -46,6 +46,8 @@ namespace System.Threading
                 throw new ArgumentException(SR.Argument_SemaphoreInitialMaximum);
             }
 
+            ThreadingAclExtensions.ThrowIfWin9xSecurityUnsupported();
+
             fixed (byte* pSecurityDescriptor = semaphoreSecurity.GetSecurityDescriptorBinaryForm())
             {
                 Interop.Kernel32.SECURITY_ATTRIBUTES secAttrs = Interop.Kernel32.SECURITY_ATTRIBUTES.Create(pSecurityDescriptor);
@@ -136,6 +138,8 @@ namespace System.Threading
             }
 
             result = null;
+            ThreadingAclExtensions.ThrowIfWin9xSecurityUnsupported();
+
             SafeWaitHandle handle = Interop.Kernel32.OpenSemaphore((uint)rights, false, name);
 
             int errorCode = Marshal.GetLastPInvokeError();

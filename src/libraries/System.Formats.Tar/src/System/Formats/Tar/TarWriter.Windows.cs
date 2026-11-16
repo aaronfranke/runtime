@@ -33,7 +33,19 @@ namespace System.Formats.Tar
 
             if (handle.IsInvalid)
             {
-                throw Win32Marshal.GetExceptionForWin32Error(Marshal.GetLastPInvokeError(), fullPath);
+                int error = Marshal.GetLastPInvokeError();
+                if (error == Interop.Errors.ERROR_ACCESS_DENIED && Environment.OSVersion.Platform == PlatformID.Win32Windows)
+                {
+                    // Win9x cannot open a directory with FILE_FLAG_BACKUP_SEMANTICS.
+                    // Its path-based metadata query still returns the modification time.
+                    DirectoryInfo directory = new(fullPath);
+                    if (directory.Exists && (directory.Attributes & FileAttributes.ReparsePoint) == 0)
+                    {
+                        return CreateEntry(TarEntryType.Directory, entryName, directory.LastWriteTimeUtc);
+                    }
+                }
+
+                throw Win32Marshal.GetExceptionForWin32Error(error, fullPath);
             }
 
             if (!Interop.Kernel32.GetFileInformationByHandle(handle, out Interop.Kernel32.BY_HANDLE_FILE_INFORMATION fileInfo))
@@ -107,23 +119,7 @@ namespace System.Formats.Tar
                 throw new IOException(SR.Format(SR.TarUnsupportedFile, fullPath));
             }
 
-            TarEntry entry = Format switch
-            {
-                TarEntryFormat.V7 => new V7TarEntry(entryType, entryName),
-                TarEntryFormat.Ustar => new UstarTarEntry(entryType, entryName),
-                TarEntryFormat.Pax => new PaxTarEntry(entryType, entryName),
-                TarEntryFormat.Gnu => new GnuTarEntry(entryType, entryName),
-                _ => throw new InvalidDataException(SR.Format(SR.TarInvalidFormat, Format)),
-            };
-
-            entry._header._mTime = fileInfo.ftLastWriteTime.ToDateTimeUtc();
-            // We do not set atime and ctime by default because many external tools are unable to read GNU entries
-            // that have these fields set to non-zero values. This is because the GNU format writes atime and ctime in the same
-            // location where other formats expect the prefix field to be written.
-            // If the user wants to set atime and ctime, they can do so by constructing the entry manually from the file and
-            // then setting the values.
-
-            entry.Mode = DefaultWindowsMode;
+            TarEntry entry = CreateEntry(entryType, entryName, fileInfo.ftLastWriteTime.ToDateTimeUtc());
 
             if (entry.EntryType == TarEntryType.SymbolicLink)
             {
@@ -151,6 +147,28 @@ namespace System.Formats.Tar
                 }
             }
 
+            return entry;
+        }
+
+        private TarEntry CreateEntry(TarEntryType entryType, string entryName, DateTime lastWriteTimeUtc)
+        {
+            TarEntry entry = Format switch
+            {
+                TarEntryFormat.V7 => new V7TarEntry(entryType, entryName),
+                TarEntryFormat.Ustar => new UstarTarEntry(entryType, entryName),
+                TarEntryFormat.Pax => new PaxTarEntry(entryType, entryName),
+                TarEntryFormat.Gnu => new GnuTarEntry(entryType, entryName),
+                _ => throw new InvalidDataException(SR.Format(SR.TarInvalidFormat, Format)),
+            };
+
+            entry._header._mTime = lastWriteTimeUtc;
+            // We do not set atime and ctime by default because many external tools are unable to read GNU entries
+            // that have these fields set to non-zero values. This is because the GNU format writes atime and ctime in the same
+            // location where other formats expect the prefix field to be written.
+            // If the user wants to set atime and ctime, they can do so by constructing the entry manually from the file and
+            // then setting the values.
+
+            entry.Mode = DefaultWindowsMode;
             return entry;
         }
     }

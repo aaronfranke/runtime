@@ -16,8 +16,8 @@ internal static partial class Interop
                 return GetNetworkParamsWindows(pFixedInfo, pOutBufLen);
             }
 
-            // The restricted system DLL search flag is unavailable on NT 4/5.
-            // NT 4 can export GetNetworkParams as a stub.
+            // The restricted system DLL search flag is unavailable on NT 5 and Win9x.
+            // Windows 95 omits IP Helper, and NT 4 can export GetNetworkParams as a stub.
             const uint ERROR_NOT_SUPPORTED = 50;
             if (!NativeLibrary.TryLoad(Path.Combine(Environment.SystemDirectory, Libraries.IpHlpApi), out nint module))
             {

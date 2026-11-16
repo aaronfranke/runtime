@@ -243,6 +243,9 @@
   <data name="ArgumentOutOfRange_FileLengthTooBig" xml:space="preserve">
     <value>Specified file length was too large for the file system.</value>
   </data>
+  <data name="PlatformNotSupported_NamedPipeServer" xml:space="preserve">
+    <value>The operating system does not support local named pipe servers.</value>
+  </data>
   <data name="PlatformNotSupported_MessageTransmissionMode" xml:space="preserve">
     <value>Message transmission mode is not supported on this platform.</value>
   </data>

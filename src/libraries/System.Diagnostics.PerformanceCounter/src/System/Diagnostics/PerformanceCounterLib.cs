@@ -978,6 +978,12 @@ namespace System.Diagnostics
 
         internal static PerformanceCounterLib GetPerformanceCounterLib(string machineName, CultureInfo culture)
         {
+            // Win9x uses a different provider through HKEY_DYN_DATA.
+            if (Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                throw new PlatformNotSupportedException(SR.PlatformNotSupported_PerfCounters);
+            }
+
             // EnglishCulture.LCID == 9 will be false only if running with Globalization Invariant Mode. Use "009" at that time as default English language identifier.
             string lcidString = EnglishCulture.LCID == 9 ? culture.LCID.ToString("X3", CultureInfo.InvariantCulture) : "009";
 

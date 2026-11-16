@@ -56,6 +56,13 @@ internal static partial class Interop
             private char _fileName;
             public ReadOnlySpan<char> FileName => MemoryMarshal.CreateReadOnlySpan(ref _fileName, (int)FileNameLength / sizeof(char));
 
+            // The caller owns an enumeration buffer large enough for the variable-length name.
+            internal void SetFileNameInBuffer(ReadOnlySpan<char> name)
+            {
+                FileNameLength = (uint)(name.Length * sizeof(char));
+                name.CopyTo(MemoryMarshal.CreateSpan(ref _fileName, name.Length));
+            }
+
             /// <summary>
             /// Gets the next info pointer or null if there are no more.
             /// </summary>

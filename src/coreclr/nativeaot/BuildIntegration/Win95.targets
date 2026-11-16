@@ -1,0 +1,16 @@
+<!--
+  Licensed to the .NET Foundation under one or more agreements.
+  The .NET Foundation licenses this file to you under the MIT license.
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <EntryPointSymbol>Win95Startup</EntryPointSymbol>
+    <_Win9xSoftwareXmm>true</_Win9xSoftwareXmm>
+    <Win95Gcc Condition="'$(Win95Gcc)' == ''">i686-w64-mingw32-gcc.exe</Win95Gcc>
+    <Win95LldLink Condition="'$(Win95LldLink)' == ''">lld-link.exe</Win95LldLink>
+    <Win95LlvmMc Condition="'$(Win95LlvmMc)' == ''">llvm-mc.exe</Win95LlvmMc>
+    <_Win9xGcc>$(Win95Gcc)</_Win9xGcc>
+    <_Win9xLldLink>$(Win95LldLink)</_Win9xLldLink>
+  </PropertyGroup>
+  <Import Project="$(MSBuildThisFileDirectory)Win9x.targets" />
+</Project>

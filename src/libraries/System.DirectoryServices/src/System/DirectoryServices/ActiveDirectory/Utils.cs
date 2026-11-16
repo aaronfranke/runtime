@@ -1859,6 +1859,8 @@ namespace System.DirectoryServices.ActiveDirectory
             cchCount1 = s1.Length;
             cchCount2 = s2.Length;
 
+            // Win9x's CompareStringW reports ERROR_CALL_NOT_IMPLEMENTED here,
+            // even when invariant globalization is enabled in the application.
             result = Interop.Kernel32.CompareString(LCID, compareFlags, s1, cchCount1, s2, cchCount2);
 
             if (result == 0)

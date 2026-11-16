@@ -10,6 +10,11 @@
 #include "zbuild.h"
 #include "x86_features.h"
 
+#if defined(_WIN32) && (defined(_M_IX86) || defined(__i386__))
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+#endif
+
 #ifdef _MSC_VER
 #  include <intrin.h>
 #else
@@ -69,6 +74,14 @@ static inline uint64_t xgetbv(unsigned int xcr) {
 void Z_INTERNAL x86_check_features(struct x86_cpu_features *features) {
     unsigned eax, ebx, ecx, edx;
     unsigned maxbasic;
+
+#if defined(_WIN32) && (defined(_M_IX86) || defined(__i386__))
+    /* Windows 95 does not enable XMM state even when CPUID advertises SSE. */
+    if (!IsProcessorFeaturePresent(PF_XMMI_INSTRUCTIONS_AVAILABLE)) {
+        memset(features, 0, sizeof(*features));
+        return;
+    }
+#endif
 
     cpuid(0, &maxbasic, &ebx, &ecx, &edx);
     cpuid(1 /*CPU_PROCINFO_AND_FEATUREBITS*/, &eax, &ebx, &ecx, &edx);

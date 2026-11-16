@@ -29,7 +29,7 @@ namespace System.Net.NetworkInformation
                     addressesByIndex.Add(row.Index, addresses);
                 }
 
-                // An all-zero address does not describe an assigned IPv4 address.
+                // Win98 reports an all-zero address for configured adapters without an address.
                 if (row.Address != 0)
                 {
                     addresses.InternalAdd(new LegacyUnicastAddress(row.Address, row.Mask));
@@ -248,7 +248,7 @@ namespace System.Net.NetworkInformation
 
             private static OperationalStatus GetOperationalStatus(in LegacyInterfaceRow row)
             {
-                // NT 4 can report unreachable even for a working Ethernet or loopback interface.
+                // NT 4 and Win98 can report unreachable even for a working Ethernet or loopback interface.
                 if (!OperatingSystem.IsWindowsVersionAtLeast(5) && row.Status == LegacyOperationalStatus.Unreachable)
                 {
                     return OperationalStatus.Unknown;

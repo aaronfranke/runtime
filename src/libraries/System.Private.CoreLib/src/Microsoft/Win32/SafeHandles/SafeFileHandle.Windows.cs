@@ -116,9 +116,24 @@ namespace Microsoft.Win32.SafeHandles
             return _lengthCanBeCached && cachedLength >= 0;
         }
 
+        internal static FileOptions NormalizeFileOptions(FileOptions options)
+        {
+            // Windows 9x exposes no completion ports. File async APIs use the
+            // existing async-over-sync path when the handle is opened synchronously.
+            if ((options & FileOptions.Asynchronous) != 0 &&
+                !ThreadPool.UseWindowsThreadPool &&
+                !PortableThreadPool.ThreadPoolInstance.SupportsIOCompletionPorts)
+            {
+                options &= ~FileOptions.Asynchronous;
+            }
+
+            return options;
+        }
+
         internal static SafeFileHandle Open(string fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, long preallocationSize, UnixFileMode? unixCreateMode = null)
         {
             Debug.Assert(!unixCreateMode.HasValue);
+            options = NormalizeFileOptions(options);
 
             using (DisableMediaInsertionPrompt.Create())
             {
@@ -292,6 +307,14 @@ namespace Microsoft.Win32.SafeHandles
                 return fileOptions;
             }
 
+            if (Environment.OSVersion.Platform == PlatformID.Win32Windows &&
+                Interop.Kernel32.GetFileType(this) == Interop.Kernel32.FileTypes.FILE_TYPE_DISK)
+            {
+                // Win9x lacks NtQueryInformationFile. Use synchronous I/O for disk handles
+                // wrapped without cached options, including IsolatedStorageFileStream's handle.
+                return _fileOptions = FileOptions.None;
+            }
+
             Interop.NtDll.CreateOptions options;
             int ntStatus = Interop.NtDll.NtQueryInformationFile(
                 FileHandle: this,
@@ -359,6 +382,10 @@ namespace Microsoft.Win32.SafeHandles
             if (kernelFileType == Interop.Kernel32.FileTypes.FILE_TYPE_UNKNOWN)
             {
                 int error = Marshal.GetLastPInvokeError();
+                if (IsLegacySocketHandle())
+                {
+                    return FileHandleType.Socket;
+                }
                 if (error != Interop.Errors.ERROR_SUCCESS)
                 {
                     throw Win32Marshal.GetExceptionForWin32Error(error, Path);
@@ -386,6 +413,11 @@ namespace Microsoft.Win32.SafeHandles
 
         private unsafe FileHandleType GetPipeOrSocketType()
         {
+            if (IsLegacySocketHandle())
+            {
+                return FileHandleType.Socket;
+            }
+
             // When GetFileType returns FILE_TYPE_PIPE, the handle can be either a pipe or a socket.
             // Use GetNamedPipeInfo to determine if it's a pipe.
             uint flags;
@@ -395,9 +427,9 @@ namespace Microsoft.Win32.SafeHandles
             }
 
             int error = Marshal.GetLastPInvokeError();
-            // NT 4/2000 deny pipe metadata on write-only ends.
+            // NT 4/2000 deny pipe metadata on write-only ends; Win9x reports invalid access even for readable anonymous pipes.
             if (!OperatingSystem.IsWindowsVersionAtLeast(5, 1) &&
-                error == Interop.Errors.ERROR_ACCESS_DENIED)
+                (error == Interop.Errors.ERROR_ACCESS_DENIED || error == Interop.Errors.ERROR_INVALID_ACCESS))
             {
                 return FileHandleType.Pipe;
             }
@@ -407,6 +439,44 @@ namespace Microsoft.Win32.SafeHandles
                 Interop.Errors.ERROR_INVALID_FUNCTION => FileHandleType.Socket,
                 _ => throw Win32Marshal.GetExceptionForWin32Error(error, Path)
             };
+        }
+
+        private unsafe bool IsLegacySocketHandle()
+        {
+            if (OperatingSystem.IsWindowsVersionAtLeast(5, 1))
+            {
+                return false;
+            }
+
+            // Win9x sockets do not follow GetFileType/GetNamedPipeInfo conventions. Use an already loaded Winsock module
+            // so file-only applications do not acquire a Winsock DLL dependency or initialize networking just to query a type.
+            IntPtr winsock = Interop.Kernel32.GetModuleHandle("ws2_32.dll");
+            if (winsock == IntPtr.Zero)
+            {
+                winsock = Interop.Kernel32.GetModuleHandle("wsock32.dll");
+            }
+            IntPtr getOption = winsock == IntPtr.Zero ? IntPtr.Zero : Interop.Kernel32.GetProcAddress(winsock, "getsockopt");
+            if (getOption == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            bool addedRef = false;
+            try
+            {
+                DangerousAddRef(ref addedRef);
+                int socketType;
+                int length = sizeof(int);
+                // SOL_SOCKET / SO_TYPE are available in Winsock 1 as well as Winsock 2.
+                return ((delegate* unmanaged[Stdcall]<IntPtr, int, int, int*, int*, int>)getOption)(handle, 0xffff, 0x1008, &socketType, &length) == 0;
+            }
+            finally
+            {
+                if (addedRef)
+                {
+                    DangerousRelease();
+                }
+            }
         }
 
         private unsafe FileHandleType GetDiskBasedType()

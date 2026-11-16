@@ -86,8 +86,8 @@ namespace System.Net.Mail
 
         internal async Task InitializeConnectionAsync(string host, int port)
         {
-            // The Windows async socket path needs ConnectEx and IOCP. NT 4
-            // and Windows 2000 can use the synchronous path above instead.
+            // The Windows async socket path needs ConnectEx and IOCP. NT 4,
+            // Windows 2000, and Win9x can use the synchronous path above instead.
             await _tcpClient!.ConnectAsync(host, port).ConfigureAwait(false);
             _stream = _tcpClient.GetStream();
         }

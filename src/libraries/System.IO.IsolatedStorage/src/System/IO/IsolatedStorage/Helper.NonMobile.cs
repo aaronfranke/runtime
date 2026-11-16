@@ -20,7 +20,8 @@ namespace System.IO.IsolatedStorage
             bool legacyWindows = OperatingSystem.IsWindows() && !OperatingSystem.IsWindowsVersionAtLeast(6);
             if (legacyWindows && IsMachine(scope) && !OperatingSystem.IsWindowsVersionAtLeast(5))
             {
-                // NT 4 lacks the well-known SID API used to secure a new machine store.
+                // Win9x lacks NT filesystem ACLs, and NT 4 lacks the well-known SID API
+                // used to secure a new machine store.
                 throw new PlatformNotSupportedException(SR.IsolatedStorage_PlatformNotSupported);
             }
 
@@ -76,6 +77,12 @@ namespace System.IO.IsolatedStorage
         private static Mutex CreateMutexNotOwned(string pathName)
         {
             string name = IdentityHelper.GetStrongHashSuitableForObjectName(pathName);
+            if (OperatingSystem.IsWindows() && Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                // Win9x has a single namespace for named wait handles.
+                return new Mutex(initiallyOwned: false, name: name);
+            }
+
             try
             {
                 return new Mutex(initiallyOwned: false, name: @"Global\" + name);

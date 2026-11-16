@@ -85,6 +85,7 @@ namespace System.Security.AccessControl
                 throw new ArgumentNullException(nameof(handle));
             }
 
+            ThrowIfWin9xSecurityUnsupported(resourceType);
             error = Win32.GetSecurityInfo(resourceType, name, handle, includeSections, out rawSD);
 
             if (error != Interop.Errors.ERROR_SUCCESS)
@@ -151,9 +152,21 @@ namespace System.Security.AccessControl
             return new CommonSecurityDescriptor(isContainer, false /* isDS */, rawSD!, true);
         }
 
+        private static void ThrowIfWin9xSecurityUnsupported(ResourceType resourceType)
+        {
+            // Windows 95 lacks the native ACL entry points. Windows 98 exports stubs.
+            if ((resourceType is ResourceType.FileObject or ResourceType.KernelObject or
+                    ResourceType.RegistryKey or ResourceType.RegistryWow6432Key) &&
+                Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                throw new PlatformNotSupportedException(SR.PlatformNotSupported_AccessControl);
+            }
+        }
+
         // Attempts to persist the security descriptor onto the object
         private void Persist(string? name, SafeHandle? handle, AccessControlSections includeSections, object? exceptionContext)
         {
+            ThrowIfWin9xSecurityUnsupported(_resourceType);
             WriteLock();
 
             try

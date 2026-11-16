@@ -31,6 +31,13 @@ namespace System.Net.Http
 
         public static async ValueTask EstablishSocksTunnelAsync(Stream stream, string host, int port, Uri proxyUri, ICredentials? proxyCredentials, bool async, CancellationToken cancellationToken)
         {
+            // Win9x has no CLR I/O completion port backend. The connection pool
+            // starts this handshake asynchronously even for synchronous Send.
+            if (OperatingSystem.IsWindows() && Environment.OSVersion.Platform == PlatformID.Win32Windows)
+            {
+                async = false;
+            }
+
             using (cancellationToken.Register(s => ((Stream)s!).Dispose(), stream))
             {
                 try

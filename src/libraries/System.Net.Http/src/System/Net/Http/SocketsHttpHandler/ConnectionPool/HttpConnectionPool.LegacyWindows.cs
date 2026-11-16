@@ -13,7 +13,7 @@ namespace System.Net.Http
         private static async ValueTask<Stream> ConnectToTcpHostLegacyWindowsAsync(DnsEndPoint endPoint, CancellationToken cancellationToken)
         {
             // ConnectEx starts with XP, but this backend's cancellation needs Vista's
-            // CancelIoEx. Earlier NT can use nonblocking connect/select
+            // CancelIoEx. Earlier NT and Win9x can use nonblocking connect/select
             // without binding a completion port or canceling native overlapped I/O.
             IPAddress[] addresses = await Dns.GetHostAddressesAsync(endPoint.Host, cancellationToken).ConfigureAwait(false);
             SocketException? lastException = null;

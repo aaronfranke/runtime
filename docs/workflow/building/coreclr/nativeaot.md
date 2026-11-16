@@ -54,6 +54,23 @@ The executable looks like a native executable, in the sense that it can be debug
 
 The compiler also has a mode where each managed assembly can be compiled into a separate object file. The object files are later linked into a single executable using the platform linker. This mode is mostly used in testing (it's faster to compile this way because we don't need to recompiling the same code from e.g. CoreLib). It's not a shipping configuration and has many problems (requires exactly matching compilation settings, forfeits many optimizations, and has trouble around cross-module generic virtual method implementations).
 
+## Legacy Windows compatibility scope
+
+This fork provides community Native AOT compatibility profiles for small console
+applications on legacy Windows. Use the matching forked compiler, CoreLib,
+framework libraries, and build integration on a modern Windows build host.
+Setting `LegacyWindowsProfile` in an unmodified installed SDK does not supply
+those components. The current development workflow builds components locally;
+these profiles are not a redistributable SDK or runtime pack.
+
+Use invariant globalization. Synchronous I/O and existing async-over-sync paths
+are the baseline; additional native async backends, full globalization, broad
+cryptography/TLS providers, and period CPU support are outside the qualified
+scope. Individual APIs retain their Native AOT, OS, filesystem, and native-provider
+requirements. The profiles do not provide a CoreCLR/JIT or GUI framework port.
+Support for a new application requires checking its AOT diagnostics, native
+imports, preserved reflection contracts, and behavior on its actual target OS.
+
 ## Legacy Windows NT profiles
 
 Use the Native AOT compiler, libraries, and build integration from this branch.
@@ -78,6 +95,36 @@ the paths, use `WinNt4Gcc` and `WinNt4LldLink`, `WinNt5Gcc` and `WinNt5LldLink`,
 or `WinNt6Gcc` and `WinNt6LldLink`. The profiles link the Universal CRT
 statically. The compiler's CPU requirements and any OS requirements imposed by
 the application and its dependencies still apply.
+
+## Windows 95 and Windows 98 profiles
+
+Use the Native AOT compiler, libraries, and build integration from this branch.
+Publish a console `Exe` with `-r win-x86 -p:PublishAot=true` and select
+`-p:LegacyWindowsProfile=win_98` or `-p:LegacyWindowsProfile=win_95`. Both
+profiles use i686 MinGW GCC, LLD, the static UCRT, and the portable thread pool.
+Use `Win98Gcc` and `Win98LldLink` or `Win95Gcc` and `Win95LldLink` to supply
+explicit tool paths.
+
+Windows 95 requires LLVM MC and the integer-only
+[Berkeley SoftFloat 3e archive](https://www.jhauser.us/arithmetic/SoftFloat.html).
+With the i686 MinGW bin directory on `PATH`, run the following from the runtime
+repository root in PowerShell. Set the SoftFloat source path first.
+
+```powershell
+$softFloat = 'C:\src\SoftFloat-3e'
+$safeSehHeader = (Resolve-Path 'src/coreclr/nativeaot/BuildIntegration/Win95SoftFloatSafeSeh.h').Path.Replace('\', '/')
+$options = '-DSOFTFLOAT_ROUND_ODD -DINLINE_LEVEL=5 -DSOFTFLOAT_FAST_DIV32TO16 -march=i686 -mno-sse -mno-sse2 -ffreestanding -fno-stack-protector'
+make -B -C "$softFloat/build/Win32-SSE2-MinGW" DELETE=echo "SOFTFLOAT_OPTS=$options -include `"$safeSehHeader`""
+```
+
+Pass `-p:Win95SoftFloatRoot=C:\src\SoftFloat-3e` at publish time. Use
+`-p:Win95LlvmMc=<path>` if `llvm-mc.exe` is outside `PATH`.
+
+The Windows 95 entry point uses software XMM state because Windows 95 does
+not enable it for user-mode code. It covers the instruction forms exercised
+by the port. The compiler and other native instructions retain their CPU
+requirements. The Win9x console translation supports the output sequences used
+by the tested line editor.
 
 ## Visual Studio Solutions
 

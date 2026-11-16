@@ -206,6 +206,9 @@
   <data name="PlatformNotSupported_IOPorts" xml:space="preserve">
     <value>System.IO.Ports is currently only supported on Windows.</value>
   </data>
+  <data name="PlatformNotSupported_SerialPort_CompletionPort" xml:space="preserve">
+    <value>SerialPort requires I/O completion ports, which are unavailable on Windows 95 and Windows 98.</value>
+  </data>
   <data name="PlatformNotSupported_SerialPort_GetPortNames" xml:space="preserve">
     <value>Enumeration of serial port names is not supported on the current platform.</value>
   </data>
