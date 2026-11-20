@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
+using System.Security;
 using System.Text;
 using System.Xml;
 
@@ -93,7 +94,7 @@ namespace System.Data
                 foreach (DataTable dt in _dataSet.Tables)
                 {
                     DataViewSetting ds = _dataViewSettingsCollection[dt];
-                    builder.Append(CultureInfo.InvariantCulture, $"<{dt.EncodedTableName} Sort=\"{ds.Sort}\" RowFilter=\"{ds.RowFilter}\" RowStateFilter=\"{ds.RowStateFilter}\"/>");
+                    builder.Append(CultureInfo.InvariantCulture, $"<{dt.EncodedTableName} Sort=\"{EscapeAttributeValue(ds.Sort)}\" RowFilter=\"{EscapeAttributeValue(ds.RowFilter)}\" RowStateFilter=\"{ds.RowStateFilter}\"/>");
                 }
                 builder.Append("</DataViewSettingCollectionString>");
                 return builder.ToString();
@@ -136,6 +137,15 @@ namespace System.Data
                     }
                 }
             }
+        }
+
+        private static string EscapeAttributeValue(string value)
+        {
+            // Attribute whitespace must be entitized to survive XML normalization.
+            return SecurityElement.Escape(value)
+                .Replace("\r", "&#xD;")
+                .Replace("\n", "&#xA;")
+                .Replace("\t", "&#x9;");
         }
 
         IEnumerator IEnumerable.GetEnumerator()

@@ -119,6 +119,40 @@ namespace System.Net.Sockets.Tests
             Assert.Equal(0, args.SendPacketsSendSize);
         }
 
+        [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.IsWindows))]
+        public void BufferPinThrows_ReleasesOpenedFiles()
+        {
+            int port;
+            using (SocketTestServer.SocketTestServerFactory(SocketImplementationType.Async, _serverAddress, out port))
+            using (Socket socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp))
+            using (MemoryManager<byte> memory = new ThrowingMemoryManager())
+            using (SocketAsyncEventArgs args = new SocketAsyncEventArgs())
+            {
+                socket.Connect(new IPEndPoint(_serverAddress, port));
+                args.SendPacketsElements = new[] { new SendPacketsElement(TestFileName), new SendPacketsElement(memory.Memory) };
+
+                Assert.Same(((ThrowingMemoryManager)memory).Error, Assert.Throws<InvalidOperationException>(() => socket.SendPacketsAsync(args)));
+                using (File.Open(TestFileName, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                {
+                    // The file must be released before the caller disposes or reuses the event args.
+                }
+
+                args.SendPacketsElements = Array.Empty<SendPacketsElement>();
+                Assert.False(socket.SendPacketsAsync(args));
+                Assert.Equal(SocketError.Success, args.SocketError);
+            }
+        }
+
+        private sealed class ThrowingMemoryManager : MemoryManager<byte>
+        {
+            internal readonly InvalidOperationException Error = new InvalidOperationException("Deliberate buffer pin failure");
+            private readonly byte[] _buffer = new byte[1];
+            public override Span<byte> GetSpan() => _buffer;
+            public override MemoryHandle Pin(int elementIndex = 0) => throw Error;
+            public override void Unpin() { }
+            protected override void Dispose(bool disposing) { }
+        }
+
         #endregion Basic Arguments
 
         #region Buffers

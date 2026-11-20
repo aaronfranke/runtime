@@ -247,18 +247,27 @@ namespace System.Runtime.InteropServices.Marshalling
                     return ConvertToUnmanaged(_managed);
                 }
 
+#pragma warning disable CA1416 // Validate platform compatibility
                 if (_managed is null
                     && (_unmanaged.VarType & ~VarEnum.VT_BYREF) is
                         VarEnum.VT_BSTR
                         or VarEnum.VT_DISPATCH
                         or VarEnum.VT_UNKNOWN)
                 {
-                    *(IntPtr*)_unmanaged.GetRawDataRef<nint>() = default;
+                    ref IntPtr storage = ref *(IntPtr*)_unmanaged.GetRawDataRef<nint>();
+                    if ((_unmanaged.VarType & ~VarEnum.VT_BYREF) == VarEnum.VT_BSTR)
+                    {
+                        Marshal.FreeBSTR(storage);
+                    }
+                    else if (storage != IntPtr.Zero)
+                    {
+                        Marshal.Release(storage);
+                    }
+                    storage = default;
                     return _unmanaged;
                 }
 
 #pragma warning disable CS0618 // Type or member is obsolete
-#pragma warning disable CA1416 // Validate platform compatibility
                 switch ((_unmanaged.VarType & ~VarEnum.VT_BYREF, _managed))
                 {
                     case (VarEnum.VT_VARIANT, _):
@@ -324,8 +333,16 @@ namespace System.Runtime.InteropServices.Marshalling
                         *(long*)_unmanaged.GetRawDataRef<nint>() = decimal.ToOACurrency(cy.WrappedObject);
                         break;
                     case (VarEnum.VT_UNKNOWN, object unkObj):
-                        *(IntPtr*)_unmanaged.GetRawDataRef<nint>() = StrategyBasedComWrappers.DefaultMarshallingInstance.GetOrCreateComInterfaceForObject(unkObj, CreateComInterfaceFlags.None);
-                        break;
+                        {
+                            IntPtr unknown = StrategyBasedComWrappers.DefaultMarshallingInstance.GetOrCreateComInterfaceForObject(unkObj, CreateComInterfaceFlags.None);
+                            ref IntPtr storage = ref *(IntPtr*)_unmanaged.GetRawDataRef<nint>();
+                            if (storage != IntPtr.Zero)
+                            {
+                                Marshal.Release(storage);
+                            }
+                            storage = unknown;
+                            break;
+                        }
                     default:
                         throw new ArgumentException("Invalid combination of unmanaged variant type and managed object type.", nameof(_managed));
                 }
@@ -344,7 +361,18 @@ namespace System.Runtime.InteropServices.Marshalling
             /// <summary>
             /// Free all resources owned by the marshaller.
             /// </summary>
-            public void Free() => _unmanaged.Dispose();
+            public void Free()
+            {
+                // BYREF storage and its contents belong to the caller.
+                if (_unmanaged.VarType.HasFlag(VarEnum.VT_BYREF))
+                {
+                    _unmanaged = default;
+                }
+                else
+                {
+                    _unmanaged.Dispose();
+                }
+            }
         }
     }
 }

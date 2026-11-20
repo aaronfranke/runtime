@@ -598,29 +598,50 @@ namespace System.Net.Sockets
             return errorCode == SocketError.SocketError ? GetLastSocketError() : SocketError.Success;
         }
 
+        private static SocketError CheckKeepAliveRetryCountSupport(SafeSocketHandle handle, SocketOptionLevel optionLevel, SocketOptionName optionName)
+        {
+            if (optionLevel == SocketOptionLevel.Tcp && optionName == SocketOptionName.TcpKeepAliveRetryCount &&
+                !OperatingSystem.IsWindowsVersionAtLeast(10, 0, 15063))
+            {
+                // Older Winsock providers can report success from setsockopt for this unsupported option.
+                return GetSockOpt(handle, optionLevel, optionName, out _);
+            }
+
+            return SocketError.Success;
+        }
+
         public static unsafe SocketError SetSockOpt(SafeSocketHandle handle, SocketOptionLevel optionLevel, SocketOptionName optionName, int optionValue)
         {
-            SocketError errorCode;
+            SocketError supportError = CheckKeepAliveRetryCountSupport(handle, optionLevel, optionName);
+            if (supportError != SocketError.Success)
+            {
+                return supportError;
+            }
+
             if (optionLevel == SocketOptionLevel.Tcp &&
                 (optionName == SocketOptionName.TcpKeepAliveTime || optionName == SocketOptionName.TcpKeepAliveInterval) &&
                 IOControlKeepAlive.IsNeeded)
             {
-                errorCode = IOControlKeepAlive.Set(handle, optionName, optionValue);
+                return IOControlKeepAlive.Set(handle, optionName, optionValue);
             }
-            else
-            {
-                errorCode = Interop.Winsock.setsockopt(
-                    handle,
-                    optionLevel,
-                    optionName,
-                    ref optionValue,
-                    sizeof(int));
-            }
+
+            SocketError errorCode = Interop.Winsock.setsockopt(
+                handle,
+                optionLevel,
+                optionName,
+                ref optionValue,
+                sizeof(int));
             return errorCode == SocketError.SocketError ? GetLastSocketError() : SocketError.Success;
         }
 
         public static unsafe SocketError SetSockOpt(SafeSocketHandle handle, SocketOptionLevel optionLevel, SocketOptionName optionName, byte[] optionValue)
         {
+            SocketError supportError = CheckKeepAliveRetryCountSupport(handle, optionLevel, optionName);
+            if (supportError != SocketError.Success)
+            {
+                return supportError;
+            }
+
             SocketError errorCode;
             if (optionLevel == SocketOptionLevel.Tcp &&
                 (optionName == SocketOptionName.TcpKeepAliveTime || optionName == SocketOptionName.TcpKeepAliveInterval) &&

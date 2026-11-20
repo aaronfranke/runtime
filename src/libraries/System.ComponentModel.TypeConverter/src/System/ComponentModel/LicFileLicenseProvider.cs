@@ -42,9 +42,9 @@ namespace System.ComponentModel
         /// Gets a license for the instance of the component and determines if it is valid.
         /// </summary>
         [UnconditionalSuppressMessage("SingleFile", "IL3002:RequiresAssemblyFiles",
-            Justification = "Only used for when Location is non-empty")]
+            Justification = "FullyQualifiedName is only read without a resolver path and with a non-empty Location.")]
         [UnconditionalSuppressMessage("SingleFile", "IL3000:RequiresAssemblyFiles",
-            Justification = "Location is checked for empty")]
+            Justification = "An empty Location disables the fallback when no resolver path is supplied.")]
         public override License? GetLicense(LicenseContext context, Type type, object? instance, bool allowExceptions)
         {
             LicFileLicense? lic = null;
@@ -74,7 +74,7 @@ namespace System.ComponentModel
                         }
                     }
 
-                    if (type.Assembly.Location.Length != 0)
+                    if (!string.IsNullOrEmpty(modulePath) || type.Assembly.Location.Length != 0)
                     {
                         modulePath ??= type.Module.FullyQualifiedName;
 

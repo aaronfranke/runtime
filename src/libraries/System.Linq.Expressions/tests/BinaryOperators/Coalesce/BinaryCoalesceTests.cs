@@ -368,6 +368,45 @@ namespace System.Linq.Expressions.Tests
         }
 
         [Theory]
+        [InlineData(false, false)]
+        [InlineData(false, true)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public static void Conversion_NullableOrUnderlyingParameter(bool useInterpreter, bool nullableParameter)
+        {
+            int? left = 3;
+            int leftCalls = 0, rightCalls = 0, conversionCalls = 0;
+            Func<int?> readLeft = () => { leftCalls++; return left; };
+            Func<long> readRight = () => { rightCalls++; return -1; };
+            Func<int, long> convert = value => { conversionCalls++; return value + 100L; };
+            ParameterExpression parameter = Expression.Parameter(nullableParameter ? typeof(int?) : typeof(int));
+            LambdaExpression conversion = Expression.Lambda(
+                Expression.Invoke(Expression.Constant(convert), Expression.Convert(parameter, typeof(int))), parameter);
+            BinaryExpression coalesce = Expression.Coalesce(
+                Expression.Invoke(Expression.Constant(readLeft)), Expression.Invoke(Expression.Constant(readRight)), conversion);
+            Func<long> result = Expression.Lambda<Func<long>>(coalesce).Compile(useInterpreter);
+
+            Assert.Equal(103L, result());
+            Assert.Equal(1, leftCalls);
+            Assert.Equal(0, rightCalls);
+            Assert.Equal(1, conversionCalls);
+
+            left = null;
+            Assert.Equal(-1L, result());
+            Assert.Equal(2, leftCalls);
+            Assert.Equal(1, rightCalls);
+            Assert.Equal(1, conversionCalls);
+
+            ParameterExpression reference = Expression.Parameter(typeof(object));
+            Expression<Func<string, int>> referenceConversion = Expression.Lambda<Func<string, int>>(Expression.Constant(42), reference);
+            ParameterExpression referenceValue = Expression.Parameter(typeof(string));
+            BinaryExpression referenceCoalesce = Expression.Coalesce(referenceValue, Expression.Constant(-1), referenceConversion);
+            Func<string, int> referenceResult = Expression.Lambda<Func<string, int>>(referenceCoalesce, referenceValue).Compile(useInterpreter);
+            Assert.Equal(42, referenceResult("value"));
+            Assert.Equal(-1, referenceResult(null));
+        }
+
+        [Theory]
         [InlinePerCompilationType(null, 5)]
         [InlinePerCompilationType(5, 10)]
         public static void Conversion_NullableInt(int? parameter, int? expected, bool useInterpreter)

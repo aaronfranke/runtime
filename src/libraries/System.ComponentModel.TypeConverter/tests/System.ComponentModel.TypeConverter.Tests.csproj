@@ -97,6 +97,7 @@
     <Compile Include="Design\Serialization\DefaultSerializationProviderAttributeTests.cs" />
     <Compile Include="Design\MenuCommandTests.cs" />
     <Compile Include="LicenseContextTests.cs" />
+    <Compile Include="LicFileLicenseProviderTests.cs" />
     <Compile Include="TestDesignerHost.cs" />
     <Compile Include="DoubleConverterTests.cs" />
     <Compile Include="EnumConverterTest.cs" />

@@ -23,6 +23,12 @@ namespace System.IO.IsolatedStorage
             Environment.SpecialFolder.LocalApplicationData; // e.g. C:\Users\Joe\AppData\Local
 
             string dataDirectory = Environment.GetFolderPath(specialFolder, Environment.SpecialFolderOption.Create);
+            if (dataDirectory.Length == 0)
+            {
+                // A missing folder must not turn the store root into a relative path.
+                throw new IsolatedStorageException(SR.IsolatedStorage_Init);
+            }
+
             dataDirectory = Path.Combine(dataDirectory, IsolatedStorageDirectoryName);
 
             return dataDirectory;

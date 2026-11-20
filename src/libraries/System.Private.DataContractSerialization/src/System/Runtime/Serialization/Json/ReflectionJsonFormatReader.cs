@@ -70,6 +70,17 @@ namespace System.Runtime.Serialization.Json
             DataMember[] members = new DataMember[memberCount];
             ReflectionGetMembers(classContract, members);
 
+            byte[] expectedElements = new byte[(memberCount + 7) / 8];
+            byte[] requiredElements = new byte[expectedElements.Length];
+            for (int i = 0; i < memberCount; i++)
+            {
+                BitFlagsGenerator.SetBit(expectedElements, i);
+                if (members[i].IsRequired)
+                {
+                    BitFlagsGenerator.SetBit(requiredElements, i);
+                }
+            }
+
             int memberIndex = -1;
 
             ExtensionDataObject? extensionData = null;
@@ -84,17 +95,29 @@ namespace System.Runtime.Serialization.Json
             {
                 if (!XmlObjectSerializerReadContext.MoveToNextElement(xmlReader))
                 {
-                    return;
+                    break;
                 }
 
                 memberIndex = jsonContext.GetJsonMemberIndex(xmlReader, memberNames, memberIndex, extensionData);
                 // GetMemberIndex returns memberNames.Length if member not found
                 if (memberIndex < members.Length)
                 {
+                    if (!BitFlagsGenerator.IsBitSet(expectedElements, memberIndex))
+                    {
+                        XmlObjectSerializerReadContextComplexJson.ThrowDuplicateMemberException(obj, memberNames, memberIndex);
+                    }
                     ReflectionReadMember(xmlReader, context, classContract, ref obj, memberIndex, members);
+                    expectedElements[memberIndex >> 3] ^= (byte)(1 << (memberIndex & 7));
                 }
             }
 
+            for (int i = 0; i < expectedElements.Length; i++)
+            {
+                if ((expectedElements[i] & requiredElements[i]) != 0)
+                {
+                    XmlObjectSerializerReadContextComplexJson.ThrowMissingRequiredMembers(obj, memberNames, expectedElements, requiredElements);
+                }
+            }
         }
 
         protected override string GetClassContractNamespace(ClassDataContract classContract)

@@ -71,6 +71,8 @@
     <Compile Include="PersistedAssemblyBuilder\AssemblySaveAssemblyBuilderTests.cs" />
     <Compile Include="PersistedAssemblyBuilder\AssemblySaveCustomAttributeTests.cs" />
     <Compile Include="PersistedAssemblyBuilder\AssemblySaveConstructorBuilderTests.cs" />
+    <Compile Include="PersistedAssemblyBuilder\ParameterInfoPositionTests.cs" />
+    <Compile Include="PersistedAssemblyBuilder\TypeLayoutPersistenceTests.cs" />
     <Compile Include="PersistedAssemblyBuilder\AssemblySaveEnumBuilderTests.cs" />
     <Compile Include="PersistedAssemblyBuilder\AssemblySaveEventBuilderTests.cs" />
     <Compile Include="PersistedAssemblyBuilder\AssemblySaveILGeneratorTests.cs" />

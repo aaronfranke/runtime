@@ -493,6 +493,12 @@ namespace System.Net.Sockets
             }
         }
 
+        internal void CompleteSendPacketsOnException()
+        {
+            FinishOperationSendPackets();
+            Complete();
+        }
+
         // Dispose call to implement IDisposable.
         public void Dispose()
         {

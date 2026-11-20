@@ -278,7 +278,13 @@ namespace System.Diagnostics
             object IEnumerator.Current => ((IEnumerator)_enumerator).Current;
             public void Dispose() => _enumerator.Dispose();
             public bool MoveNext() => _enumerator.MoveNext();
-            void IEnumerator.Reset() => ((IEnumerator)_enumerator).Reset();
+            void IEnumerator.Reset()
+            {
+                // Reset mutates the boxed value, so copy the cursor back afterward.
+                IEnumerator enumerator = _enumerator;
+                enumerator.Reset();
+                _enumerator = (List<KeyValuePair<string, object?>>.Enumerator)enumerator;
+            }
         }
     }
 }

@@ -123,6 +123,49 @@ namespace System.Diagnostics.Tests
             }
         }
 
+        [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void TestAsyncStreams_ProcessReuse(bool readError)
+        {
+            using Process process = readError
+                ? CreateProcessPortable(RemotelyInvokable.ErrorProcessBody)
+                : CreateProcessPortable(RemotelyInvokable.StreamBody);
+            process.StartInfo.RedirectStandardOutput = !readError;
+            process.StartInfo.RedirectStandardError = readError;
+            var lines = new List<string>();
+            DataReceivedEventHandler handler = (sender, args) => lines.Add(args.Data);
+            if (readError)
+            {
+                process.ErrorDataReceived += handler;
+            }
+            else
+            {
+                process.OutputDataReceived += handler;
+            }
+
+            for (int i = 0; i < 2; i++)
+            {
+                Assert.True(process.Start());
+                if (readError)
+                {
+                    process.BeginErrorReadLine();
+                }
+                else
+                {
+                    process.BeginOutputReadLine();
+                }
+                Assert.True(process.WaitForExit(WaitInMS));
+                process.WaitForExit();
+                Assert.Equal(3, lines.Count);
+                Assert.NotNull(lines[0]);
+                Assert.NotNull(lines[1]);
+                Assert.Null(lines[2]);
+                lines.Clear();
+                process.Close();
+            }
+        }
+
         [ConditionalFact(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
         async public Task TestAsyncOutputStream_CancelOutputRead()
         {

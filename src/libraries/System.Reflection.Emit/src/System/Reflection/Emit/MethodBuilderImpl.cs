@@ -296,7 +296,7 @@ namespace System.Reflection.Emit
             {
                 if (_parameterBuilders[i + 1] == null)
                 {
-                    parameters[i] = new ParameterInfoWrapper(new ParameterBuilderImpl(this, i, ParameterAttributes.None, null), _parameterTypes[i]);
+                    parameters[i] = new ParameterInfoWrapper(new ParameterBuilderImpl(this, i + 1, ParameterAttributes.None, null), _parameterTypes[i]);
                 }
                 else
                 {

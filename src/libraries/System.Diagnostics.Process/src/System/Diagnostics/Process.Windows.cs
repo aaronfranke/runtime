@@ -398,7 +398,7 @@ namespace System.Diagnostics
             return new ConsoleEncoding(enc); // ensure encoding doesn't output a preamble
         }
 
-        /// <summary>Gets timing information for the current process.</summary>
+        /// <summary>Gets timing information for the associated process.</summary>
         private ProcessThreadTimes GetProcessTimes()
         {
             using (SafeProcessHandle handle = GetProcessHandle(Interop.Advapi32.ProcessOptions.PROCESS_QUERY_LIMITED_INFORMATION, false))

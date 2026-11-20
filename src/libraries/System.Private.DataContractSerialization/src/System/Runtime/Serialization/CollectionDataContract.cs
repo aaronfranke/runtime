@@ -1350,7 +1350,7 @@ namespace System.Runtime.Serialization.DataContracts
                 if (getEnumeratorMethod == null || !Globals.TypeOfIEnumerator.IsAssignableFrom(getEnumeratorMethod.ReturnType))
                 {
                     Type? ienumerableInterface =
-                        interfaceType.GetInterfaces().Where(t => t.FullName!.StartsWith("System.Collections.Generic.IEnumerable")).FirstOrDefault() ??
+                        interfaceType.GetInterfaces().Where(t => t.IsGenericType && t.GetGenericTypeDefinition() == Globals.TypeOfIEnumerableGeneric).FirstOrDefault() ??
                         Globals.TypeOfIEnumerable;
                     getEnumeratorMethod = GetIEnumerableGetEnumeratorMethod(type, ienumerableInterface);
                 }

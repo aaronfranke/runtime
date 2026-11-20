@@ -31,6 +31,51 @@ public static partial class DataContractJsonSerializerTests
         method.Invoke(null, new object[] { 1 });
     }
 #endif
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"first\":1}")]
+    [InlineData("{\"last\":2}")]
+    [InlineData("{\"first\":1,\"last\":2,\"first\":3}")]
+    [InlineData("{\"first\":1,\"last\":2,\"m7\":1,\"m7\":2}")]
+    public static void DCJS_RejectsMissingRequiredAndDuplicateMembers(string json)
+    {
+        var serializer = new DataContractJsonSerializer(typeof(RequiredJsonDerived));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        Assert.Throws<SerializationException>(() => serializer.ReadObject(stream));
+    }
+
+    [Theory]
+    [InlineData("{\"first\":1,\"last\":2}")]
+    [InlineData("{\"unknown\":true,\"last\":2,\"m3\":8,\"first\":1}")]
+    public static void DCJS_ReadsRequiredMembersOutOfOrder(string json)
+    {
+        var serializer = new DataContractJsonSerializer(typeof(RequiredJsonDerived));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var result = (RequiredJsonDerived)serializer.ReadObject(stream);
+        Assert.Equal(1, result.First);
+        Assert.Equal(2, result.Last);
+    }
+
+    [DataContract]
+    private class RequiredJsonBase
+    {
+        [DataMember(Name = "first", IsRequired = true)] public int First { get; set; }
+    }
+
+    [DataContract]
+    private sealed class RequiredJsonDerived : RequiredJsonBase
+    {
+        [DataMember(Name = "m0")] public int M0 { get; set; }
+        [DataMember(Name = "m1")] public int M1 { get; set; }
+        [DataMember(Name = "m2")] public int M2 { get; set; }
+        [DataMember(Name = "m3")] public int M3 { get; set; }
+        [DataMember(Name = "m4")] public int M4 { get; set; }
+        [DataMember(Name = "m5")] public int M5 { get; set; }
+        [DataMember(Name = "m6")] public int M6 { get; set; }
+        [DataMember(Name = "m7")] public int M7 { get; set; }
+        [DataMember(Name = "last", Order = 1, IsRequired = true)] public int Last { get; set; }
+    }
+
     [Fact]
     public static void DCJS_BoolAsRoot()
     {

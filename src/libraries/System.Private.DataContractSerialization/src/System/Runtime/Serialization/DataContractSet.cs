@@ -38,6 +38,7 @@ namespace System.Runtime.Serialization.DataContracts
 
             _referencedTypes = dataContractSet._referencedTypes;
             _referencedCollectionTypes = dataContractSet._referencedCollectionTypes;
+            _surrogateProvider = dataContractSet._surrogateProvider;
             _extendedSurrogateProvider = dataContractSet._extendedSurrogateProvider;
 
             foreach (KeyValuePair<XmlQualifiedName, DataContract> pair in dataContractSet.Contracts)
@@ -51,6 +52,11 @@ namespace System.Runtime.Serialization.DataContracts
                 {
                     ProcessedContracts.Add(pair.Key, pair.Value);
                 }
+            }
+
+            foreach (DictionaryEntry entry in dataContractSet.SurrogateData)
+            {
+                SurrogateData[entry.Key] = entry.Value;
             }
         }
 

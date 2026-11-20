@@ -20,6 +20,48 @@ using Xunit;
 public static partial class XmlSerializerTests
 {
     [Fact]
+    public static void Xml_NestedChoiceIdentifier()
+    {
+        var serializer = new XmlSerializer(typeof(NestedChoiceIdentifierValue));
+        foreach (var value in new[]
+        {
+            new NestedChoiceIdentifierValue { Value = 17, Kind = NestedChoiceIdentifierKind.Number },
+            new NestedChoiceIdentifierValue { Value = "choice <&>", Kind = NestedChoiceIdentifierKind.Text }
+        })
+        {
+            using var output = new StringWriter();
+            serializer.Serialize(output, value);
+            using var input = new StringReader(output.ToString());
+            var actual = (NestedChoiceIdentifierValue)serializer.Deserialize(input);
+            Assert.Equal(value.Kind, actual.Kind);
+            Assert.Equal(value.Value, actual.Value);
+        }
+
+        using var invalidOutput = new StringWriter();
+        Assert.Throws<InvalidOperationException>(() => serializer.Serialize(invalidOutput,
+            new NestedChoiceIdentifierValue { Value = 17, Kind = NestedChoiceIdentifierKind.Text }));
+    }
+
+    public sealed class NestedChoiceIdentifierValue
+    {
+        [XmlElement("number", typeof(int))]
+        [XmlElement("text", typeof(string))]
+        [XmlChoiceIdentifier(nameof(Kind))]
+        public object Value;
+
+        [XmlIgnore]
+        public NestedChoiceIdentifierKind Kind;
+    }
+
+    public enum NestedChoiceIdentifierKind
+    {
+        [XmlEnum("number")]
+        Number,
+        [XmlEnum("text")]
+        Text
+    }
+
+    [Fact]
     public static void Xml_BoolAsRoot()
     {
         Assert.True(SerializeAndDeserialize<bool>(true,
@@ -3963,12 +4005,6 @@ public static partial class XmlSerializerTests
     }
 }
 
-// These types must be declared at the top level rather than nested inside XmlSerializerTests.
-// The serializer matches an [XmlChoiceIdentifier] value by comparing the choice enum's
-// TypeDesc.FullName against the runtime choiceSource.GetType().FullName. TypeDesc normalizes
-// nested-type names by replacing '+' with '.' (see Types.cs), so a nested enum's TypeDesc name
-// ("XmlSerializerTests.ArrayLikeChoice") would never equal its reflection FullName
-// ("XmlSerializerTests+ArrayLikeChoice"), and the choice would fail to match.
 public class TypeWithArrayLikeChoiceElement
 {
     // One of the choice element types (Numbers) is an array, so its element mapping is an

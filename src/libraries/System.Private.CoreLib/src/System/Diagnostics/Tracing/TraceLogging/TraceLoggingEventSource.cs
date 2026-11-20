@@ -669,7 +669,7 @@ namespace System.Diagnostics.Tracing
                             if (m_Dispatchers != null)
                             {
                                 var eventData = (EventPayload?)(eventTypes.typeInfos[0].GetData(data));
-                                WriteToAllListeners(eventName, ref descriptor, nameInfo.tags, pActivityId, pRelatedActivityId, eventData);
+                                WriteToAllListeners(nameInfo.name, ref descriptor, nameInfo.tags, pActivityId, pRelatedActivityId, eventData);
                             }
                         }
                         catch (Exception ex)

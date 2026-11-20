@@ -2658,12 +2658,14 @@ namespace System.Linq.Expressions.Interpreter
 
             if (node.Conversion != null)
             {
-                ParameterExpression temp = Expression.Parameter(node.Left.Type, "temp");
+                // Use the delegate signature, which can differ from the lambda parameter type.
+                MethodInfo invokeMethod = node.Conversion.Type.GetInvokeMethod();
+                ParameterExpression temp = Expression.Parameter(invokeMethod.GetParametersCached()[0].ParameterType, "temp");
                 LocalDefinition local = _locals.DefineLocal(temp, _instructions.Count);
                 _instructions.EmitStoreLocal(local.Index);
 
                 CompileMethodCallExpression(
-                    Expression.Call(node.Conversion, node.Conversion.Type.GetInvokeMethod(), new[] { temp })
+                    Expression.Call(node.Conversion, invokeMethod, new[] { temp })
                 );
 
                 _locals.UndefineLocal(local, _instructions.Count);

@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace System.Xml
 {
-    internal sealed class XmlDictionaryAsyncCheckWriter : XmlDictionaryWriter, IXmlTextWriterInitializer
+    internal sealed class XmlDictionaryAsyncCheckWriter : XmlDictionaryWriter, IXmlTextWriterInitializer, IFragmentCapableXmlDictionaryWriter
     {
         private readonly XmlDictionaryWriter _coreWriter;
         private Task? _lastTask;
@@ -695,6 +695,37 @@ namespace System.Xml
         {
             CheckAsync();
             CoreWriter.Dispose();
+        }
+
+
+        public bool CanFragment
+        {
+            get
+            {
+                CheckAsync();
+                return CoreWriter is IFragmentCapableXmlDictionaryWriter writer && writer.CanFragment;
+            }
+        }
+
+        private IFragmentCapableXmlDictionaryWriter GetFragmentWriter()
+        {
+            CheckAsync();
+            return CoreWriter as IFragmentCapableXmlDictionaryWriter ?? throw new NotSupportedException();
+        }
+
+        public void StartFragment(Stream stream, bool generateSelfContainedTextFragment)
+        {
+            GetFragmentWriter().StartFragment(stream, generateSelfContainedTextFragment);
+        }
+
+        public void EndFragment()
+        {
+            GetFragmentWriter().EndFragment();
+        }
+
+        public void WriteFragment(byte[] buffer, int offset, int count)
+        {
+            GetFragmentWriter().WriteFragment(buffer, offset, count);
         }
 
         public void SetOutput(Stream stream, Encoding encoding, bool ownsStream)

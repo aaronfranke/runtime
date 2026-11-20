@@ -128,13 +128,15 @@ namespace System
                     ex.AppendStackIP(IP);
 
 #if FEATURE_PERFTRACING
-                if (isFirstFrame && NativeRuntimeEventSource.Log.IsEnabled())
+                // Event source initialization can itself throw before Log is assigned.
+                // Skip logging that exception until the source is available.
+                if (isFirstFrame && NativeRuntimeEventSource.Log is { } eventSource && eventSource.IsEnabled())
                 {
                     string typeName = !fatalOutOfMemory ? ex.GetType().ToString() : "System.OutOfMemoryException";
                     string message = !fatalOutOfMemory ? ex.Message :
                         "Insufficient memory to continue the execution of the program.";
 
-                    NativeRuntimeEventSource.Log.ExceptionThrown_V1(typeName, message, IP, (uint)ex.HResult, 0);
+                    eventSource.ExceptionThrown_V1(typeName, message, IP, (uint)ex.HResult, 0);
                 }
 #endif
             }

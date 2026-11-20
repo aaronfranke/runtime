@@ -26,6 +26,32 @@ namespace BasicEventSourceTests
             public string UserName { get; set; }
         }
 
+        [EventData(Name = "NamedPayload")]
+        private struct NamedPayloadData
+        {
+            public int Value { get; set; }
+        }
+
+        [Theory]
+        [InlineData(null, "NamedPayload")]
+        [InlineData("ExplicitName", "ExplicitName")]
+        public void Write_NullEventName_UsesEventDataName(string eventName, string expectedName)
+        {
+            using (var logger = new EventSource("Write-EventDataName"))
+            using (var listener = new EventListenerListener())
+            {
+                var events = new List<Event>();
+                listener.OnEvent = data => events.Add(data);
+                listener.EventSourceCommand(logger.Name, EventCommand.Enable);
+                listener.Start();
+                listener.WaitForEventSourceStateChange(logger, true);
+                logger.Write(eventName, new NamedPayloadData { Value = 42 });
+                Event result = Assert.Single(events);
+                Assert.Equal(expectedName, result.EventName);
+                Assert.Equal(42, result.PayloadValue(0, "Value"));
+            }
+        }
+
         public static TheoryData<Listener> GetListeners()
         {
             TheoryData<Listener> data = new TheoryData<Listener>();

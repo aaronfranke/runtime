@@ -20,6 +20,10 @@ namespace System.Runtime.Serialization
         [RequiresUnreferencedCode(DataContract.SerializerTrimmerWarning)]
         public void ReflectionWriteClass(XmlWriterDelegator xmlWriter, object obj, XmlObjectSerializerWriteContext context, ClassDataContract classContract)
         {
+            if (classContract.IsReadOnlyContract && !context.SerializeReadOnlyTypes)
+            {
+                DataContract.ThrowInvalidDataContractException(classContract.SerializationExceptionMessage, type: null);
+            }
             _reflectionClassWriter.ReflectionWriteClass(xmlWriter, obj, context, classContract, null/*memberNames*/);
         }
 

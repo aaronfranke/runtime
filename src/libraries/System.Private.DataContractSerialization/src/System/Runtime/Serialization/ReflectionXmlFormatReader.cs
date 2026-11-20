@@ -66,7 +66,7 @@ namespace System.Runtime.Serialization
             context.IncrementItemCount(memberCount);
             int memberIndex = -1;
             int firstRequiredMember;
-            _ = GetRequiredMembers(classContract, out firstRequiredMember);
+            bool[] requiredMembers = GetRequiredMembers(classContract, out firstRequiredMember);
             bool hasRequiredMembers = (firstRequiredMember < memberCount);
             int requiredIndex = hasRequiredMembers ? firstRequiredMember : -1;
             DataMember[] members = new DataMember[memberCount];
@@ -84,22 +84,29 @@ namespace System.Runtime.Serialization
             {
                 if (!XmlObjectSerializerReadContext.MoveToNextElement(xmlReader))
                 {
+                    if (hasRequiredMembers && requiredIndex < memberCount)
+                    {
+                        XmlObjectSerializerReadContext.ThrowRequiredMemberMissingException(xmlReader, memberIndex, requiredIndex, memberNames);
+                    }
                     return;
                 }
-                if (hasRequiredMembers)
-                {
-                    memberIndex = context.GetMemberIndexWithRequiredMembers(xmlReader, memberNames, memberNamespaces, memberIndex, requiredIndex, extensionData);
-                }
-                else
-                {
-                    memberIndex = context.GetMemberIndex(xmlReader, memberNames, memberNamespaces, memberIndex, extensionData);
-                }
+                int nextMemberIndex = hasRequiredMembers
+                    ? context.GetMemberIndexWithRequiredMembers(xmlReader, memberNames, memberNamespaces, memberIndex, requiredIndex, extensionData)
+                    : context.GetMemberIndex(xmlReader, memberNames, memberNamespaces, memberIndex, extensionData);
 
                 // GetMemberIndex returns memberNames.Length if member not found
-                if (memberIndex < members.Length)
+                if (nextMemberIndex < members.Length)
                 {
+                    memberIndex = nextMemberIndex;
                     ReflectionReadMember(xmlReader, context, classContract, ref obj, memberIndex, members);
-                    requiredIndex = memberIndex + 1;
+                    if (requiredMembers[memberIndex])
+                    {
+                        requiredIndex = memberIndex + 1;
+                        while (requiredIndex < memberCount && !requiredMembers[requiredIndex])
+                        {
+                            requiredIndex++;
+                        }
+                    }
                 }
             }
         }

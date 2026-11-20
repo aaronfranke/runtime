@@ -2210,7 +2210,7 @@ namespace System.Xml.Serialization
 
         private void CreateUnknownNodeException(object? o)
         {
-            CreateUnknownNodeException();
+            throw CreateUnknownNodeException();
         }
 
         internal sealed class CollectionMember : List<object?>

@@ -38,9 +38,12 @@ namespace System.Net.Sockets
         {
             if (s_socketKeepAliveTable.TryGetValue(handle, out IOControlKeepAlive? ioControlKeepAlive))
             {
-                return optionName == SocketOptionName.TcpKeepAliveTime ?
-                    MillisecondsToSeconds(ioControlKeepAlive._timeMs) :
-                    MillisecondsToSeconds(ioControlKeepAlive._intervalMs);
+                lock (ioControlKeepAlive)
+                {
+                    return optionName == SocketOptionName.TcpKeepAliveTime ?
+                        MillisecondsToSeconds(ioControlKeepAlive._timeMs) :
+                        MillisecondsToSeconds(ioControlKeepAlive._intervalMs);
+                }
             }
 
             return optionName == SocketOptionName.TcpKeepAliveTime ?
@@ -62,20 +65,24 @@ namespace System.Net.Sockets
         public static SocketError Set(SafeSocketHandle handle, SocketOptionName optionName, int optionValueSeconds)
         {
             IOControlKeepAlive ioControlKeepAlive = s_socketKeepAliveTable.GetOrAdd(handle, (SafeSocketHandle handle) => new IOControlKeepAlive());
-            if (optionName == SocketOptionName.TcpKeepAliveTime)
+            lock (ioControlKeepAlive)
             {
-                ioControlKeepAlive._timeMs = SecondsToMilliseconds(optionValueSeconds);
-            }
-            else
-            {
-                ioControlKeepAlive._intervalMs = SecondsToMilliseconds(optionValueSeconds);
-            }
+                uint optionValueMs = SecondsToMilliseconds(optionValueSeconds);
+                bool setTime = optionName == SocketOptionName.TcpKeepAliveTime;
+                uint timeMs = setTime ? optionValueMs : ioControlKeepAlive._timeMs;
+                uint intervalMs = setTime ? ioControlKeepAlive._intervalMs : optionValueMs;
 
-            byte[] buffer = s_keepAliveValuesBuffer ??= new byte[3 * sizeof(uint)];
-            ioControlKeepAlive.Fill(buffer);
-            int realOptionLength = 0;
-            Debug.Assert(OperatingSystem.IsWindows());
-            return SocketPal.WindowsIoctl(handle, unchecked((int)IOControlCode.KeepAliveValues), buffer, null, out realOptionLength);
+                byte[] buffer = s_keepAliveValuesBuffer ??= new byte[3 * sizeof(uint)];
+                Fill(buffer, timeMs, intervalMs);
+                Debug.Assert(OperatingSystem.IsWindows());
+                SocketError error = SocketPal.WindowsIoctl(handle, unchecked((int)IOControlCode.KeepAliveValues), buffer, null, out _);
+                if (error == SocketError.Success)
+                {
+                    ioControlKeepAlive._timeMs = timeMs;
+                    ioControlKeepAlive._intervalMs = intervalMs;
+                }
+                return error;
+            }
         }
 
         private static bool SupportsKeepAliveViaSocketOption()
@@ -109,7 +116,7 @@ namespace System.Net.Sockets
 
         private static uint SecondsToMilliseconds(int seconds) => (uint)seconds * 1000u;
 
-        private void Fill(byte[] buffer)
+        private static void Fill(byte[] buffer, uint timeMs, uint intervalMs)
         {
             Debug.Assert(buffer != null);
             Debug.Assert(buffer.Length == 3 * sizeof(uint));
@@ -117,8 +124,8 @@ namespace System.Net.Sockets
             const uint OnOff = 1u;
             bool written =
                 BitConverter.TryWriteBytes(buffer.AsSpan(), OnOff) &
-                BitConverter.TryWriteBytes(buffer.AsSpan(sizeof(uint)), _timeMs) &
-                BitConverter.TryWriteBytes(buffer.AsSpan(sizeof(uint) * 2), _intervalMs);
+                BitConverter.TryWriteBytes(buffer.AsSpan(sizeof(uint)), timeMs) &
+                BitConverter.TryWriteBytes(buffer.AsSpan(sizeof(uint) * 2), intervalMs);
             Debug.Assert(written);
         }
     }

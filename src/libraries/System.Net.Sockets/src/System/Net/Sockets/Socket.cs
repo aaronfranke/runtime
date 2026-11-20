@@ -3260,8 +3260,8 @@ namespace System.Net.Sockets
             }
             catch (Exception)
             {
-                // Clear in-use flag on event args object.
-                e.Complete();
+                // Release files opened during preparation and clear the in-use flag.
+                e.CompleteSendPacketsOnException();
                 throw;
             }
 

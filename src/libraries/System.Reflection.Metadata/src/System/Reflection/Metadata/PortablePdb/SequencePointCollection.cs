@@ -38,6 +38,7 @@ namespace System.Reflection.Metadata
         public struct Enumerator : IEnumerator<SequencePoint>
         {
             private BlobReader _reader;
+            private readonly DocumentHandle _document;
             private SequencePoint _current;
             private int _previousNonHiddenStartLine;
             private ushort _previousNonHiddenStartColumn;
@@ -45,6 +46,7 @@ namespace System.Reflection.Metadata
             internal Enumerator(MemoryBlock block, DocumentHandle document)
             {
                 _reader = new BlobReader(block);
+                _document = document;
                 _current = new SequencePoint(document, -1);
                 _previousNonHiddenStartLine = -1;
                 _previousNonHiddenStartColumn = 0;
@@ -202,7 +204,9 @@ namespace System.Reflection.Metadata
             public void Reset()
             {
                 _reader.Reset();
-                _current = default(SequencePoint);
+                _current = new SequencePoint(_document, -1);
+                _previousNonHiddenStartLine = -1;
+                _previousNonHiddenStartColumn = 0;
             }
 
             void IDisposable.Dispose()

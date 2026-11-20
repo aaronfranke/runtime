@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Net.Mail.Tests;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
@@ -52,6 +53,29 @@ namespace System.Net.Mail.Tests
             string[] files = Directory.GetFiles(TempFolder, "*");
             Assert.Equal(1, files.Length);
             Assert.Equal(".eml", Path.GetExtension(files[0]));
+        }
+
+        [Fact]
+        public async Task Send_SpecifiedPickupDirectory_SerializationFailureClosesFile()
+        {
+            Smtp.DeliveryMethod = SmtpDeliveryMethod.SpecifiedPickupDirectory;
+            Smtp.PickupDirectoryLocation = TempFolder;
+            IOException cause = new IOException("Attachment read failed.");
+            using MailMessage message = new MailMessage("sender@example.invalid", "recipient@example.invalid");
+            message.Attachments.Add(new Attachment(new ThrowingReadStream(cause), "input.bin"));
+
+            SmtpException exception = await SendMail<SmtpException>(message);
+            Assert.Same(cause, exception.InnerException);
+            string file = Assert.Single(Directory.GetFiles(TempFolder));
+            using FileStream reopened = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        }
+
+        private sealed class ThrowingReadStream(IOException cause) : MemoryStream(new byte[1])
+        {
+            public override int Read(byte[] buffer, int offset, int count) => throw cause;
+            public override int Read(Span<byte> buffer) => throw cause;
+            public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => Task.FromException<int>(cause);
+            public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) => ValueTask.FromException<int>(cause);
         }
 
         [Fact]

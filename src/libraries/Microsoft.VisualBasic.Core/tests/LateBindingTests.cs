@@ -10,6 +10,17 @@ namespace Microsoft.VisualBasic.CompilerServices.Tests
     public class LateBindingTests
     {
         [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void LateCall_NullArguments_InvokesParameterlessMember(bool explicitType)
+        {
+            var target = new SingleMethodClass();
+            LateBinding.LateCall(target, explicitType ? typeof(SingleMethodClass) : null,
+                nameof(SingleMethodClass.Invoke), null, null, null);
+            Assert.Equal(1, target.Calls);
+        }
+
+        [Theory]
         [MemberData(nameof(LateCall_TestData))]
         public void LateCall(object obj, Type objType, string name, object[] args, string[] paramNames, bool[] copyBack, Func<object, object> getResult, object expected)
         {
@@ -172,6 +183,12 @@ namespace Microsoft.VisualBasic.CompilerServices.Tests
             yield return new object[] { new InstanceClass(), new object[] { 4, 5 }, new string[] { "i" }, true, false };
             yield return new object[] { new InstanceStruct(), new object[] { 6, 7, 8 }, new string[] { "x", "y" }, false, true };
             yield return new object[] { new InstanceStruct(), new object[] { 9, 10 }, new string[] { "i" }, true, true };
+        }
+
+        private sealed class SingleMethodClass
+        {
+            public int Calls;
+            public void Invoke() => Calls++;
         }
 
         private sealed class StaticClass

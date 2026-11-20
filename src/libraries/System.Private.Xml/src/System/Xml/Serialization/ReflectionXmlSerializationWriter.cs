@@ -383,7 +383,8 @@ namespace System.Xml.Serialization
                         // ie EnumType.ValueX could == 1, but TotallyDifferentEnumType.ValueY could also == 1.
                         TypeDesc td = element.Mapping!.TypeDesc!;
                         bool enumUseReflection = choice.Mapping!.TypeDesc!.UseReflection;
-                        string enumTypeName = choice.Mapping!.TypeDesc!.FullName;
+                        // TypeDesc.FullName normalizes nested names for generated C#; compare reflection names here.
+                        string enumTypeName = choice.Mapping!.TypeDesc!.Type!.FullName!;
                         string enumFullName = (enumUseReflection ? "" : enumTypeName + ".@") + FindChoiceEnumValue(element, (EnumMapping)choice.Mapping, enumUseReflection);
                         string choiceFullName = (enumUseReflection ? "" : choiceSource!.GetType().FullName + ".@") + choiceSource!.ToString();
 

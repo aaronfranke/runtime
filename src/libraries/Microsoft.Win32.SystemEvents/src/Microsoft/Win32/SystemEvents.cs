@@ -27,6 +27,7 @@ namespace Microsoft.Win32
         private static volatile Thread? s_windowThread;
         private static volatile ManualResetEvent? s_eventWindowReady;
         private static readonly Random s_randomTimerId = new Random();
+        private static readonly object s_sessionNotificationLock = new object();
         private static volatile bool s_registeredSessionNotification;
         private static volatile IntPtr s_defWindowProc;
 
@@ -401,17 +402,9 @@ namespace Microsoft.Win32
 
         private void Dispose()
         {
-            if (_windowHandle != IntPtr.Zero)
+            IntPtr handle = DetachWindow();
+            if (handle != IntPtr.Zero)
             {
-                if (s_registeredSessionNotification)
-                {
-                    Interop.Wtsapi32.WTSUnRegisterSessionNotification(s_systemEvents!._windowHandle);
-                    GC.KeepAlive(s_systemEvents);
-                }
-
-                IntPtr handle = _windowHandle;
-                _windowHandle = IntPtr.Zero;
-
                 // We check IsWindow because our broadcast window may have been destroyed.
 
                 if (Interop.User32.IsWindow(handle) && DefWndProc != IntPtr.Zero)
@@ -502,17 +495,46 @@ namespace Microsoft.Win32
 
         private static void EnsureRegisteredSessionNotification()
         {
-            if (!s_registeredSessionNotification)
+            lock (s_sessionNotificationLock)
             {
-                IntPtr retval = Interop.Kernel32.LoadLibrary(Interop.Libraries.Wtsapi32);
-
-                if (retval != IntPtr.Zero)
+                if (!s_registeredSessionNotification)
                 {
-                    Interop.Wtsapi32.WTSRegisterSessionNotification(s_systemEvents!._windowHandle, Interop.Wtsapi32.NOTIFY_FOR_THIS_SESSION);
-                    GC.KeepAlive(s_systemEvents);
-                    s_registeredSessionNotification = true;
-                    Interop.Kernel32.FreeLibrary(retval);
+                    SystemEvents systemEvents = s_systemEvents!;
+                    IntPtr window = systemEvents._windowHandle;
+                    if (window != IntPtr.Zero)
+                    {
+                        IntPtr module = Interop.Kernel32.LoadLibrary(Interop.Libraries.Wtsapi32);
+                        if (module != IntPtr.Zero)
+                        {
+                            try
+                            {
+                                s_registeredSessionNotification = Interop.Wtsapi32.WTSRegisterSessionNotification(window, Interop.Wtsapi32.NOTIFY_FOR_THIS_SESSION);
+                            }
+                            finally
+                            {
+                                Interop.Kernel32.FreeLibrary(module);
+                            }
+                        }
+                    }
+                    GC.KeepAlive(systemEvents);
                 }
+            }
+        }
+
+        private IntPtr DetachWindow()
+        {
+            // Registration and clearing the HWND must share a lock: a concurrent
+            // subscriber must not register a window that is being destroyed.
+            lock (s_sessionNotificationLock)
+            {
+                IntPtr window = _windowHandle;
+                if (window != IntPtr.Zero && s_registeredSessionNotification)
+                {
+                    Interop.Wtsapi32.WTSUnRegisterSessionNotification(window);
+                    s_registeredSessionNotification = false;
+                }
+                _windowHandle = IntPtr.Zero;
+                return window;
             }
         }
 
@@ -1177,8 +1199,8 @@ namespace Microsoft.Win32
                     break;
 
                 case Interop.User32.WM_DESTROY:
+                    DetachWindow();
                     Interop.User32.PostQuitMessage(0);
-                    _windowHandle = IntPtr.Zero;
                     break;
 
                 default:

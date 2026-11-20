@@ -31,3 +31,8 @@ extern "C" int DLL_EXPORT STDMETHODCALLTYPE NativeParseIntDelegateRef(int val, T
 {
     return atoi(del(&val));
 }
+
+extern "C" DLL_EXPORT void* STDMETHODCALLTYPE NativeReturnCustomMarshalerData(void* value)
+{
+    return value;
+}

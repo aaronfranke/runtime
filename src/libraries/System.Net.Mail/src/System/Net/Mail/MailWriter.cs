@@ -8,7 +8,7 @@ using System.Net.Mime;
 
 namespace System.Net.Mail
 {
-    internal sealed class MailWriter : BaseWriter
+    internal sealed class MailWriter : BaseWriter, IDisposable
     {
         /// <summary>
         /// ctor.
@@ -42,6 +42,12 @@ namespace System.Net.Mail
             _bufferBuilder.Append("\r\n"u8);
             Flush();
             _stream.Close();
+        }
+
+        public void Dispose()
+        {
+            // Unlike Close(), disposal releases the stream without finishing the message.
+            _stream.Dispose();
         }
 
         /// <summary>

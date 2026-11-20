@@ -44,6 +44,73 @@ public static partial class XmlSerializerTests
     }
 #endif
 
+    [Fact]
+    public static void Xml_CustomSerializer_UsesCompiledHooks()
+    {
+        var serializer = new CompiledHookSerializer();
+        using var output = new StringWriter();
+        serializer.Serialize(output, "owned <&>");
+        Assert.Equal(1, serializer.Writes);
+        using var reader = XmlReader.Create(new StringReader(output.ToString()));
+        Assert.False(serializer.CanDeserialize(reader));
+        Assert.Equal("owned <&>", serializer.Deserialize(reader));
+        Assert.Equal(1, serializer.Reads);
+    }
+
+#if !XMLSERIALIZERGENERATORTESTS
+    [Fact]
+    [System.Diagnostics.CodeAnalysis.DynamicDependency(System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(CompiledHookMappedValue))]
+    public static void Xml_MappedSerializer_PreservesReflectionDispatch()
+    {
+        var serializer = new XmlSerializer(typeof(CompiledHookMappedValue));
+        using var output = new StringWriter();
+        serializer.Serialize(output, new CompiledHookMappedValue { Value = 17 });
+        using var reader = new StringReader(output.ToString());
+        Assert.Equal(17, ((CompiledHookMappedValue)serializer.Deserialize(reader)).Value);
+    }
+
+    public sealed class CompiledHookMappedValue
+    {
+        public int Value { get; set; }
+    }
+
+#endif
+
+    private sealed class CompiledHookSerializer : XmlSerializer
+    {
+        internal int Reads;
+        internal int Writes;
+        protected override XmlSerializationReader CreateReader() => new CompiledHookReader();
+        protected override XmlSerializationWriter CreateWriter() => new CompiledHookWriter();
+        protected override object Deserialize(XmlSerializationReader reader)
+        {
+            Reads++;
+            return ((CompiledHookReader)reader).ReadValue();
+        }
+        protected override void Serialize(object value, XmlSerializationWriter writer)
+        {
+            Writes++;
+            ((CompiledHookWriter)writer).WriteValue((string)value);
+        }
+    }
+
+    private sealed class CompiledHookReader : XmlSerializationReader
+    {
+        protected override void InitIDs() { }
+        protected override void InitCallbacks() { }
+        internal string ReadValue()
+        {
+            Reader.MoveToContent();
+            return Reader.ReadElementContentAsString("value", "");
+        }
+    }
+
+    private sealed class CompiledHookWriter : XmlSerializationWriter
+    {
+        protected override void InitCallbacks() { }
+        internal void WriteValue(string value) => WriteElementString("value", "", value);
+    }
+
     public static bool DefaultValueAttributeIsSupported => AppContext.TryGetSwitch("System.ComponentModel.DefaultValueAttribute.IsSupported", out bool isEnabled) ? isEnabled : true;
 
     [Fact]

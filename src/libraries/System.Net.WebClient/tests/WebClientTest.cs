@@ -134,6 +134,43 @@ namespace System.Net.Tests
         }
 
         [Fact]
+        [PlatformSpecific(TestPlatforms.Windows)]
+        public static async Task UploadFileAsync_RequestStreamFailure_ClosesSourceBeforeCompletion()
+        {
+            string source = Path.GetTempFileName();
+            try
+            {
+                using var client = new WebClient();
+                var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                client.UploadFileCompleted += (_, e) =>
+                {
+                    try
+                    {
+                        Assert.IsType<WebException>(e.Error);
+                        Assert.False(e.Cancelled);
+                        // A regular file cannot be the destination's parent directory.
+                        // Reopening exclusively proves the upload released its source handle.
+                        using (File.Open(source, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                        {
+                        }
+                        completed.SetResult();
+                    }
+                    catch (Exception error)
+                    {
+                        completed.SetException(error);
+                    }
+                };
+                client.UploadFileAsync(new Uri(Path.Combine(source, "destination")), "PUT", source);
+                await completed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.False(client.IsBusy);
+            }
+            finally
+            {
+                File.Delete(source);
+            }
+        }
+
+        [Fact]
         public static void UploadFile_InvalidArguments_ThrowExceptions()
         {
             var wc = new WebClient();

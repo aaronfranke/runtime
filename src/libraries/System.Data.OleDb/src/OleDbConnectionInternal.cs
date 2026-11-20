@@ -694,6 +694,8 @@ namespace System.Data.OleDb
             return false;
         }
 
+        // Runtime COM activation is unavailable in Native AOT, including on modern Windows.
+        // Replacing it also requires porting the RCW-based provider interfaces below.
         private static object CreateInstanceDataLinks()
         {
             Type datalink = Type.GetTypeFromCLSID(ODB.CLSID_DataLinks, true)!;
