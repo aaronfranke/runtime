@@ -162,14 +162,18 @@ namespace System.Security.AccessControl
                 privilege?.Revert();
             }
 
-            // Extract data from the returned pointer
-            uint Length = Interop.Advapi32.GetSecurityDescriptorLength(ByteArray);
-
-            byte[] BinaryForm = new byte[Length];
-
-            Marshal.Copy(ByteArray, BinaryForm, 0, (int)Length);
-
-            Marshal.FreeHGlobal(ByteArray);
+            byte[] BinaryForm;
+            try
+            {
+                // Extract data from the returned pointer
+                uint Length = Interop.Advapi32.GetSecurityDescriptorLength(ByteArray);
+                BinaryForm = new byte[Length];
+                Marshal.Copy(ByteArray, BinaryForm, 0, (int)Length);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(ByteArray);
+            }
 
             resultSd = new RawSecurityDescriptor(BinaryForm, 0);
 

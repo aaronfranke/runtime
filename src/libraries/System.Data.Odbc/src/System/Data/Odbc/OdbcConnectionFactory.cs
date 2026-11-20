@@ -53,6 +53,10 @@ namespace System.Data.Odbc
             return new OdbcConnectionPoolGroupProviderInfo();
         }
 
+        // The embedded XML resolves these enum column types by name.
+        [DynamicDependency(DynamicallyAccessedMemberTypes.PublicFields, typeof(GroupByBehavior))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.PublicFields, typeof(IdentifierCase))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.PublicFields, typeof(SupportedJoinOperators))]
         protected override DbMetaDataFactory CreateMetaDataFactory(DbConnectionInternal internalConnection)
         {
             Debug.Assert(internalConnection != null, "internalConnection may not be null.");

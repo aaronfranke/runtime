@@ -207,6 +207,58 @@ namespace System.Runtime.InteropServices.Tests
             Assert.Equal(expectedOrderingSixthCall.Skip(15), OrderTrackingCustomMarshaler.Events.Skip(15));
         }
 
+        public static void Return_CustomMarshaler_CleansUpNativeData()
+        {
+            IntPtr value = new IntPtr(0x1234);
+            ReturnCleanupCustomMarshaler.NativeCleanups.Clear();
+            ReturnCleanupCustomMarshaler.Conversions = 0;
+            Assert.Equal(value, (IntPtr)CustomMarshalerReturn(value));
+            Assert.Equal(1, ReturnCleanupCustomMarshaler.Conversions);
+            Assert.True(ReturnCleanupCustomMarshaler.NativeCleanups.SequenceEqual(new[] { value }));
+
+            ReturnCleanupCustomMarshaler.NativeCleanups.Clear();
+            ReturnCleanupCustomMarshaler.Conversions = 0;
+            Assert.Null(CustomMarshalerReturn(IntPtr.Zero));
+            Assert.Equal(0, ReturnCleanupCustomMarshaler.Conversions);
+            Assert.Equal(0, ReturnCleanupCustomMarshaler.NativeCleanups.Count);
+
+            ReturnCleanupCustomMarshaler.ThrowOnConversion = true;
+            try
+            {
+                Assert.Throws<InvalidOperationException>(() => CustomMarshalerReturn(value));
+                Assert.True(ReturnCleanupCustomMarshaler.NativeCleanups.SequenceEqual(new[] { value }));
+            }
+            finally
+            {
+                ReturnCleanupCustomMarshaler.ThrowOnConversion = false;
+            }
+        }
+
+        public sealed class ReturnCleanupCustomMarshaler : ICustomMarshaler
+        {
+            public static List<IntPtr> NativeCleanups { get; } = new List<IntPtr>();
+            public static int Conversions;
+            public static bool ThrowOnConversion;
+            public static ICustomMarshaler GetInstance(string cookie) => new ReturnCleanupCustomMarshaler();
+            public int GetNativeDataSize() => IntPtr.Size;
+            public object MarshalNativeToManaged(IntPtr nativeData)
+            {
+                Conversions++;
+                if (ThrowOnConversion)
+                {
+                    throw new InvalidOperationException();
+                }
+                return nativeData;
+            }
+            public IntPtr MarshalManagedToNative(object managedData) => throw new NotSupportedException();
+            public void CleanUpNativeData(IntPtr nativeData) => NativeCleanups.Add(nativeData);
+            public void CleanUpManagedData(object managedData) { }
+        }
+
+        [DllImport("CustomMarshalersPrimitives", EntryPoint = "NativeReturnCustomMarshalerData")]
+        [return: MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(ReturnCleanupCustomMarshaler))]
+        public static extern object CustomMarshalerReturn(IntPtr nativeData);
+
         // This should only be used *once*, as it uses static state.
         public class OrderTrackingCustomMarshaler : ICustomMarshaler
         {
@@ -699,6 +751,7 @@ namespace System.Runtime.InteropServices.Tests
                 CustomMarshaler_BoxedValueType_Success();
                 Parameter_CustomMarshalerProvidedOnClassType_ForwardsCorrectly();
                 Parameter_CustomMarshalerProvided_CallsMethodsInCorrectOrdering();
+                Return_CustomMarshaler_CleansUpNativeData();
                 CustomMarshaler_BothMarshalTypeRefAndMarshalTypeProvided_PicksMarshalType();
                 Parameter_CookieProvided_PassesCookieToGetInstance();
                 Parameter_NotCustomMarshalerType_UsesSpecifiedMarshaler();

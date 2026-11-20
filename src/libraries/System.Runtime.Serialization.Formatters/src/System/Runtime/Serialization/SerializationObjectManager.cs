@@ -18,7 +18,7 @@ namespace System.Runtime.Serialization
         public SerializationObjectManager(StreamingContext context)
         {
             _context = context;
-            _objectSeenTable = new Dictionary<object, object>();
+            _objectSeenTable = new Dictionary<object, object>(ReferenceEqualityComparer.Instance);
         }
 
         [RequiresUnreferencedCode(SerializationObjectManagerUnreferencedCodeMessage)]

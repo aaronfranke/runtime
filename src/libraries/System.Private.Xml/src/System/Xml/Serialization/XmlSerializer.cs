@@ -536,9 +536,10 @@ namespace System.Xml.Serialization
             return reader.ReadObject();
         }
 
-        private static bool ShouldUseReflectionBasedSerialization(XmlMapping mapping)
+        private bool ShouldUseReflectionBasedSerialization(XmlMapping mapping)
         {
-            return Mode == SerializationMode.ReflectionOnly
+            // A custom serializer built with the protected constructor has no reflection contract.
+            return (Mode == SerializationMode.ReflectionOnly && (_rootType != null || mapping != null))
                 || (mapping != null && mapping.IsSoap);
         }
 

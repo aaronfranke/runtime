@@ -20,6 +20,10 @@ namespace System.Runtime.Serialization
         [RequiresUnreferencedCode(DataContract.SerializerTrimmerWarning)]
         public void ReflectionWriteClass(XmlWriterDelegator xmlWriter, object obj, XmlObjectSerializerWriteContext context, ClassDataContract classContract)
         {
+            if (classContract.IsReadOnlyContract && !context.SerializeReadOnlyTypes)
+            {
+                DataContract.ThrowInvalidDataContractException(classContract.SerializationExceptionMessage, type: null);
+            }
             _reflectionClassWriter.ReflectionWriteClass(xmlWriter, obj, context, classContract, null/*memberNames*/);
         }
 
@@ -27,6 +31,11 @@ namespace System.Runtime.Serialization
         [RequiresUnreferencedCode(DataContract.SerializerTrimmerWarning)]
         public static void ReflectionWriteCollection(XmlWriterDelegator xmlWriter, object obj, XmlObjectSerializerWriteContext context, CollectionDataContract collectionDataContract)
         {
+            if (collectionDataContract.IsReadOnlyContract && !context.SerializeReadOnlyTypes)
+            {
+                DataContract.ThrowInvalidDataContractException(collectionDataContract.SerializationExceptionMessage, type: null);
+            }
+
             XmlDictionaryString ns = collectionDataContract.Namespace;
             XmlDictionaryString itemName = collectionDataContract.CollectionItemName;
 

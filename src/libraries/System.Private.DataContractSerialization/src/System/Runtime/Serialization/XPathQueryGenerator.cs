@@ -71,11 +71,11 @@ namespace System.Runtime.Serialization
         [RequiresUnreferencedCode(DataContract.SerializerTrimmerWarning)]
         private static DataContract ProcessClassDataContract(ClassDataContract contract, ExportContext context, MemberInfo memberNode)
         {
-            string prefix = context.SetNamespace(contract.Namespace!.Value);
-            foreach (DataMember member in GetDataMembers(contract))
+            foreach ((DataMember member, XmlDictionaryString memberNamespace) in GetDataMembers(contract))
             {
                 if (member.MemberInfo.Name == memberNode.Name && member.MemberInfo.DeclaringType!.IsAssignableFrom(memberNode.DeclaringType))
                 {
+                    string prefix = context.SetNamespace(memberNamespace.Value);
                     context.WriteChildToContext(member, prefix);
                     return member.MemberTypeContract;
                 }
@@ -83,11 +83,11 @@ namespace System.Runtime.Serialization
             throw XmlObjectSerializer.CreateSerializationException(SR.QueryGeneratorPathToMemberNotFound);
         }
 
-        private static IEnumerable<DataMember> GetDataMembers(ClassDataContract contract)
+        private static IEnumerable<(DataMember Member, XmlDictionaryString Namespace)> GetDataMembers(ClassDataContract contract)
         {
             if (contract.BaseClassContract != null)
             {
-                foreach (DataMember baseClassMember in GetDataMembers(contract.BaseClassContract))
+                foreach ((DataMember Member, XmlDictionaryString Namespace) baseClassMember in GetDataMembers(contract.BaseClassContract))
                 {
                     yield return baseClassMember;
                 }
@@ -96,7 +96,7 @@ namespace System.Runtime.Serialization
             {
                 foreach (DataMember member in contract.Members)
                 {
-                    yield return member;
+                    yield return (member, contract.Namespace!);
                 }
             }
         }

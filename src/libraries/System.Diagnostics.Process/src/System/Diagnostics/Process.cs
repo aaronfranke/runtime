@@ -897,6 +897,8 @@ namespace System.Diagnostics
 
                     _output = null;
                     _error = null;
+                    _pendingOutputRead = false;
+                    _pendingErrorRead = false;
 
                     CloseCore();
                     Refresh();

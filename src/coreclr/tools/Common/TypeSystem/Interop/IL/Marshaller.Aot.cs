@@ -1258,6 +1258,28 @@ namespace Internal.TypeSystem.Interop
             return MarshallerLocalVariable;
         }
 
+        protected override void EmitMarshalReturnValueManagedToNative()
+        {
+            SetupArgumentsForReturnValueMarshalling();
+            ILCodeStream returnStream = _ilCodeStreams.ReturnValueMarshallingCodeStream;
+            StoreNativeValue(returnStream);
+
+            ILCodeLabel nullReturn = _ilCodeStreams.Emitter.NewCodeLabel();
+            LoadNativeValue(returnStream);
+            returnStream.Emit(ILOpcode.brfalse, nullReturn);
+            AllocAndTransformNativeToManaged(returnStream);
+            returnStream.EmitLabel(nullReturn);
+
+            // Custom-marshalled returns own native data just like marshalled inputs.
+            // A null return bypasses both conversion and cleanup, matching CoreCLR.
+            ILCodeStream cleanupStream = _ilCodeStreams.CleanupCodeStream;
+            ILCodeLabel noCleanup = _ilCodeStreams.Emitter.NewCodeLabel();
+            LoadNativeValue(cleanupStream);
+            cleanupStream.Emit(ILOpcode.brfalse, noCleanup);
+            EmitCleanUpNativeData(cleanupStream);
+            cleanupStream.EmitLabel(noCleanup);
+        }
+
         protected override void TransformManagedToNative(ILCodeStream codeStream)
         {
             var lMarshaller = InitializeMarshallerVariable();

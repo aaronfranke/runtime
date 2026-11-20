@@ -79,7 +79,7 @@ namespace System.Reflection.Emit
 
         public override string? Name => _pb.Name;
 
-        public override int Position => _pb.Position;
+        public override int Position => _pb.Position - 1;
 
         public override Type ParameterType => _type;
 

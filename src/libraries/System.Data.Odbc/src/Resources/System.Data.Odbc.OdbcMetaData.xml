@@ -2,7 +2,8 @@
 <!-- edited with XMLSPY v5 rel. 4 U (http://www.xmlspy.com) by Carl Perry (Microsoft) -->
 <NewDataSet>
 	<xs:schema id="NewDataSet" xmlns="" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
-		<xs:element name="NewDataSet" msdata:IsDataSet="true">
+		<!-- An omitted locale makes DataSet.ReadXml request en-US, even in invariant mode. -->
+		<xs:element name="NewDataSet" msdata:IsDataSet="true" msdata:Locale="">
 			<xs:complexType>
 				<xs:choice minOccurs="0" maxOccurs="unbounded">
 					<xs:element name="MetaDataCollections" msdata:MinimumCapacity="9">
@@ -35,19 +36,19 @@
 								<xs:element name="DataSourceProductName" type="xs:string" minOccurs="0"/>
 								<xs:element name="DataSourceProductVersion" type="xs:string" minOccurs="0"/>
 								<xs:element name="DataSourceProductVersionNormalized" type="xs:string" minOccurs="0"/>
-								<xs:element name="GroupByBehavior" msdata:DataType="System.Data.Common.GroupByBehavior, System.Data, Version=1.2.3600.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" type="xs:string" minOccurs="0"/>
+								<xs:element name="GroupByBehavior" msdata:DataType="System.Data.Common.GroupByBehavior, System.Data.Common" type="xs:string" minOccurs="0"/>
 								<xs:element name="IdentifierPattern" type="xs:string" minOccurs="0"/>
-								<xs:element name="IdentifierCase" msdata:DataType="System.Data.Common.IdentifierCase, System.Data, Version=1.2.3600.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" type="xs:string" minOccurs="0"/>
+								<xs:element name="IdentifierCase" msdata:DataType="System.Data.Common.IdentifierCase, System.Data.Common" type="xs:string" minOccurs="0"/>
 								<xs:element name="OrderByColumnsInSelect" type="xs:boolean" minOccurs="0"/>
 								<xs:element name="ParameterMarkerFormat" type="xs:string" minOccurs="0"/>
 								<xs:element name="ParameterMarkerPattern" type="xs:string" minOccurs="0"/>
 								<xs:element name="ParameterNameMaxLength" type="xs:int" minOccurs="0"/>
 								<xs:element name="ParameterNamePattern" type="xs:string" minOccurs="0"/>
 								<xs:element name="QuotedIdentifierPattern" type="xs:string" minOccurs="0"/>
-								<xs:element name="QuotedIdentifierCase" msdata:DataType="System.Data.Common.IdentifierCase, System.Data, Version=1.2.3600.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" type="xs:string" minOccurs="0"/>
+								<xs:element name="QuotedIdentifierCase" msdata:DataType="System.Data.Common.IdentifierCase, System.Data.Common" type="xs:string" minOccurs="0"/>
 								<xs:element name="StatementSeparatorPattern" type="xs:string" minOccurs="0"/>
 								<xs:element name="StringLiteralPattern" type="xs:string" minOccurs="0"/>
-								<xs:element name="SupportedJoinOperators" msdata:DataType="System.Data.Common.SupportedJoinOperators, System.Data, Version=1.2.3600.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" type="xs:string" minOccurs="0"/>
+								<xs:element name="SupportedJoinOperators" msdata:DataType="System.Data.Common.SupportedJoinOperators, System.Data.Common" type="xs:string" minOccurs="0"/>
 							</xs:sequence>
 						</xs:complexType>
 					</xs:element>

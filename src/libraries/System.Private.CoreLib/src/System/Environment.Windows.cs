@@ -579,6 +579,8 @@ namespace System
                 Span<byte> sid = stackalloc byte[68];
                 uint sidLength = 68;
 
+                // A failed name query can leave the builder empty. Terminate the native input buffer.
+                builder.NullTerminate();
                 while (!Interop.Advapi32.LookupAccountNameW(null, ref builder.GetPinnableReference(), ref MemoryMarshal.GetReference(sid),
                     ref sidLength, ref domainBuilder.GetPinnableReference(), ref length, out _))
                 {

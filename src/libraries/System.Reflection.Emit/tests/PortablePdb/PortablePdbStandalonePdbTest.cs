@@ -14,6 +14,50 @@ namespace System.Reflection.Emit.Tests
     [ConditionalClass(typeof(PlatformDetection), nameof(PlatformDetection.IsNotBrowser))]
     public class PortablePdbStandalonePdbTest
     {
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("// café\n")]
+        public void SetSource_EmbeddedSourceRoundTrips(string sourceText)
+        {
+            var assembly = new PersistedAssemblyBuilder(new AssemblyName("EmbeddedSource"), typeof(object).Assembly);
+            ModuleBuilder module = assembly.DefineDynamicModule("EmbeddedSource");
+            ISymbolDocumentWriter document = module.DefineDocument("source.cs", SymLanguageType.CSharp);
+            byte[] source = sourceText == null ? null : System.Text.Encoding.UTF8.GetBytes(sourceText);
+            if (source != null)
+            {
+                document.SetSource(new byte[] { 1 });
+                document.SetSource(source);
+            }
+
+            TypeBuilder type = module.DefineType("Example");
+            ILGenerator il = type.DefineMethod("Read", MethodAttributes.Static, typeof(void), Type.EmptyTypes).GetILGenerator();
+            il.MarkSequencePoint(document, 1, 1, 1, 2);
+            il.Emit(OpCodes.Nop);
+            il.MarkSequencePoint(document, 2, 1, 2, 2);
+            il.Emit(OpCodes.Ret);
+            type.CreateType();
+            MetadataBuilder metadata = assembly.GenerateMetadata(out _, out _, out MetadataBuilder pdbMetadata);
+            var image = new BlobBuilder();
+            new PortablePdbBuilder(pdbMetadata, metadata.GetRowCounts(), default).Serialize(image);
+            using var provider = MetadataReaderProvider.FromPortablePdbImage(ImmutableArray.Create(image.ToArray()));
+            MetadataReader reader = provider.GetMetadataReader();
+            Assert.Equal(1, reader.Documents.Count);
+            foreach (DocumentHandle documentHandle in reader.Documents)
+            {
+                CustomDebugInformationHandleCollection records = reader.GetCustomDebugInformation(documentHandle);
+                Assert.Equal(source == null ? 0 : 1, records.Count);
+                foreach (CustomDebugInformationHandle recordHandle in records)
+                {
+                    CustomDebugInformation record = reader.GetCustomDebugInformation(recordHandle);
+                    Assert.Equal(new Guid("0e8a571b-6926-466e-b4ad-8ab04611f5fe"), reader.GetGuid(record.Kind));
+                    BlobReader blob = reader.GetBlobReader(record.Value);
+                    Assert.Equal(0, blob.ReadInt32());
+                    Assert.Equal(source, blob.ReadBytes(blob.RemainingBytes));
+                }
+            }
+        }
+
         [Fact]
         public void CreateStandalonePDBAndVerifyTest()
         {

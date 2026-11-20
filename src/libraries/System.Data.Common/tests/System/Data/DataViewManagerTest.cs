@@ -25,6 +25,7 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
+using System.Xml;
 using Xunit;
 
 namespace System.Data.Tests
@@ -71,6 +72,36 @@ namespace System.Data.Tests
             m.DataViewSettingCollectionString = "<DataViewSettingCollectionString>blah<table2-1 RowFilter='a=b' ApplyDefaultSort='true' /></DataViewSettingCollectionString>";
             // MS.NET ignores ApplyDefaultSort.
             //            Assert.Equal (@"<DataViewSettingCollectionString><table2-1 Sort="""" RowFilter=""a=b"" RowStateFilter=""Deleted""/></DataViewSettingCollectionString>", m.DataViewSettingCollectionString);
+        }
+
+        [Theory]
+        [InlineData("Id DESC", "Id < 3 AND Text = 'a&\"b'")]
+        [InlineData("[A&B] ASC", "Text = 'tab\tone\r\nnext'")]
+        [InlineData("", "")]
+        public void DataViewSettingCollectionString_RoundTripsAttributeValues(string sort, string rowFilter)
+        {
+            using var dataSet = new DataSet();
+            using var table = new DataTable("Items & more");
+            dataSet.Tables.Add(table);
+            using var manager = new DataViewManager(dataSet);
+            DataViewSetting setting = manager.DataViewSettings[table];
+            setting.Sort = sort;
+            setting.RowFilter = rowFilter;
+            setting.RowStateFilter = DataViewRowState.ModifiedCurrent;
+
+            string xml = manager.DataViewSettingCollectionString;
+            var document = new XmlDocument();
+            document.LoadXml(xml);
+            var element = (XmlElement)document.DocumentElement.FirstChild;
+            Assert.Equal("Items & more", XmlConvert.DecodeName(element.LocalName));
+            Assert.Equal(sort, element.GetAttribute("Sort"));
+            Assert.Equal(rowFilter, element.GetAttribute("RowFilter"));
+
+            using var restored = new DataViewManager(dataSet);
+            restored.DataViewSettingCollectionString = xml;
+            Assert.Equal(sort, restored.DataViewSettings[table].Sort);
+            Assert.Equal(rowFilter, restored.DataViewSettings[table].RowFilter);
+            Assert.Equal(DataViewRowState.ModifiedCurrent, restored.DataViewSettings[table].RowStateFilter);
         }
 
         [Fact]

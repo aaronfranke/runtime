@@ -40,6 +40,7 @@
              Link="Common\System\Collections\Generic\ReferenceEqualityComparer.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'">
+    <Compile Include="SerializationObjectManagerTests.cs" />
     <Compile Include="BinaryFormatterEventSourceTests.cs" />
     <Compile Include="SerializationGuardTests.cs" />
     <Compile Include="$(CommonPath)System\Runtime\Serialization\SerializationGuard.cs"

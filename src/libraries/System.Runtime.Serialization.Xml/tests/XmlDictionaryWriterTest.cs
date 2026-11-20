@@ -318,7 +318,7 @@ public static class XmlDictionaryWriterTest
         Encoding encoding = Encoding.GetEncoding("utf-8");
         MemoryStream ms = new MemoryStream();
         XmlDictionaryWriter writer = (XmlDictionaryWriter)ReaderWriterFactory.CreateXmlWriter(rwType, ms, encoding);
-        Assert.False(FragmentHelper.CanFragment(writer));
+        Assert.True(FragmentHelper.CanFragment(writer));
     }
 
     [Fact]

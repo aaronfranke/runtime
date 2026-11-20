@@ -1075,6 +1075,8 @@ namespace System.Net
             }
             finally
             {
+                // Request stream acquisition can fail before the readStream using block.
+                readStream?.Dispose();
                 if (exception != null)
                 {
                     completionDelegate(null, exception, asyncOp);
@@ -1857,16 +1859,11 @@ namespace System.Net
 
             protected override void Dispose(bool disposing)
             {
-                try
+                // File and FTP responses can wait for the request stream to close.
+                base.Dispose(disposing);
+                if (disposing)
                 {
-                    if (disposing)
-                    {
-                        _webClient.GetWebResponse(_request).Dispose();
-                    }
-                }
-                finally
-                {
-                    base.Dispose(disposing);
+                    _webClient.GetWebResponse(_request).Dispose();
                 }
             }
         }

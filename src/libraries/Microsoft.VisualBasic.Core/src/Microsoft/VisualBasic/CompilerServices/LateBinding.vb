@@ -943,6 +943,10 @@ Namespace Microsoft.VisualBasic.CompilerServices
                 ByVal IgnoreReturn As Boolean) As Object
             Dim flags As BindingFlags
 
+            If args Is Nothing Then
+                args = Array.Empty(Of Object)()
+            End If
+
             flags = BindingFlags.IgnoreCase Or
                     BindingFlags.InvokeMethod Or
                     BindingFlags.FlattenHierarchy Or

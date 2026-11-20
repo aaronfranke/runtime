@@ -333,10 +333,12 @@ internal static partial class Interop
             internal uint cumulativeConnections;
         }
 
+        internal const uint MIB_IP_FORWARDING = 1;
+
         [StructLayout(LayoutKind.Sequential)]
         internal struct MibIpStats
         {
-            internal int forwardingEnabled;
+            internal uint forwarding;
             internal uint defaultTtl;
             internal uint packetsReceived;
             internal uint receivedPacketsWithHeaderErrors;

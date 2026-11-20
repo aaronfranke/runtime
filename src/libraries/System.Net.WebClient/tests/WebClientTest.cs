@@ -134,6 +134,73 @@ namespace System.Net.Tests
         }
 
         [Fact]
+        public static async Task UploadFileAsync_RequestStreamFailure_ClosesSourceBeforeCompletion()
+        {
+            string source = Path.GetTempFileName();
+            try
+            {
+                using var client = new WebClient();
+                var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                client.UploadFileCompleted += (_, e) =>
+                {
+                    try
+                    {
+                        Assert.IsType<WebException>(e.Error);
+                        Assert.False(e.Cancelled);
+                        // A regular file cannot be the destination's parent directory.
+                        // Reopening exclusively proves the upload released its source handle.
+                        using (File.Open(source, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                        {
+                        }
+                        completed.SetResult();
+                    }
+                    catch (Exception error)
+                    {
+                        completed.SetException(error);
+                    }
+                };
+                client.UploadFileAsync(new Uri(Path.Combine(source, "destination")), "PUT", source);
+                await completed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.False(client.IsBusy);
+            }
+            finally
+            {
+                File.Delete(source);
+            }
+        }
+
+        [Fact]
+        public static void OpenWrite_FileUri_DisposeDoesNotWaitForRequestTimeout()
+        {
+            string destination = Path.GetTempFileName();
+            try
+            {
+                // FileWebRequest only produces a response after its request stream is closed. Disposing the
+                // OpenWrite stream used to ask for the response first, blocking until the request timed out.
+                using var client = new ShortTimeoutWebClient();
+                using (Stream stream = client.OpenWrite(new Uri(destination), "PUT"))
+                {
+                    stream.Write("hello"u8);
+                }
+                Assert.Equal("hello", File.ReadAllText(destination));
+            }
+            finally
+            {
+                File.Delete(destination);
+            }
+        }
+
+        private sealed class ShortTimeoutWebClient : WebClient
+        {
+            protected override WebRequest GetWebRequest(Uri address)
+            {
+                WebRequest request = base.GetWebRequest(address);
+                request.Timeout = 10_000; // fail in 10 seconds instead of the default 100 if Dispose blocks
+                return request;
+            }
+        }
+
+        [Fact]
         public static void UploadFile_InvalidArguments_ThrowExceptions()
         {
             var wc = new WebClient();

@@ -35,6 +35,11 @@ namespace System.Runtime.Serialization.Json
                 throw new ArgumentException(nameof(xmlWriter));
             }
 
+            if (collectionContract.IsReadOnlyContract && !context.SerializeReadOnlyTypes)
+            {
+                DataContract.ThrowInvalidDataContractException(collectionContract.SerializationExceptionMessage, type: null);
+            }
+
             XmlDictionaryString itemName = XmlObjectSerializerWriteContextComplexJson.CollectionItemName;
 
             if (collectionContract.Kind == CollectionKind.Array)

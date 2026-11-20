@@ -561,6 +561,7 @@ namespace System.Net.Mail
                 string? pickupDirectory = PickupDirectoryLocation;
 
                 MailWriter writer;
+                MailWriter? pickupWriter = null;
                 List<SmtpFailedRecipientException>? failedRecipientExceptions = null;
                 switch (DeliveryMethod)
                 {
@@ -575,7 +576,7 @@ namespace System.Net.Mail
 
                         allowUnicode = IsUnicodeSupported(); // Determined by the DeliveryFormat parameter
                         ValidateUnicodeRequirement(message, recipients, allowUnicode);
-                        writer = GetFileMailWriter(pickupDirectory);
+                        writer = pickupWriter = GetFileMailWriter(pickupDirectory);
                         break;
 
                     case SmtpDeliveryMethod.Network:
@@ -589,9 +590,12 @@ namespace System.Net.Mail
                             message.BuildDeliveryStatusNotificationString(), allowUnicode, cancellationToken).ConfigureAwait(false);
                         break;
                 }
-                synchronous = false;
-                await message.SendAsync<TIOAdapter>(writer, DeliveryMethod != SmtpDeliveryMethod.Network, allowUnicode, cancellationToken).ConfigureAwait(false);
-                writer.Close();
+                using (pickupWriter)
+                {
+                    synchronous = false;
+                    await message.SendAsync<TIOAdapter>(writer, DeliveryMethod != SmtpDeliveryMethod.Network, allowUnicode, cancellationToken).ConfigureAwait(false);
+                    writer.Close();
+                }
 
                 //throw if we couldn't send to any of the recipients
                 if (failedRecipientExceptions != null)

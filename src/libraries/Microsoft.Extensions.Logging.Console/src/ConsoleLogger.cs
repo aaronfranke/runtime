@@ -54,7 +54,15 @@ namespace Microsoft.Extensions.Logging.Console
 
             t_stringWriter ??= new StringWriter();
             LogEntry<TState> logEntry = new LogEntry<TState>(logLevel, _name, eventId, state, exception, formatter);
-            Formatter.Write(in logEntry, ScopeProvider, t_stringWriter);
+            try
+            {
+                Formatter.Write(in logEntry, ScopeProvider, t_stringWriter);
+            }
+            catch
+            {
+                t_stringWriter.GetStringBuilder().Clear();
+                throw;
+            }
 
             var sb = t_stringWriter.GetStringBuilder();
             if (sb.Length == 0)
@@ -81,7 +89,15 @@ namespace Microsoft.Extensions.Logging.Console
             foreach (var rec in records)
             {
                 var logEntry = new LogEntry<BufferedLogRecord>(rec.LogLevel, _name, rec.EventId, rec, null, static (s, _) => s.FormattedMessage ?? string.Empty);
-                Formatter.Write(in logEntry, null, writer);
+                try
+                {
+                    Formatter.Write(in logEntry, null, writer);
+                }
+                catch
+                {
+                    sb.Clear();
+                    throw;
+                }
 
                 if (sb.Length == 0)
                 {

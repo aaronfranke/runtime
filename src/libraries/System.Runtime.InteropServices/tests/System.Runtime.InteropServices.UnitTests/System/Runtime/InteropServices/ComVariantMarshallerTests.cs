@@ -398,5 +398,139 @@ namespace System.Runtime.InteropServices.Tests
             // Go through IConvertible to handle the case of "same size, different signedness" (e.g. int and uint)
             Assert.Equal(valueToSet, ((IConvertible)ComVariantMarshaller.ConvertToManaged(variant)).ToType(valueToSet.GetType(), null));
         }
+
+        [Theory]
+        [InlineData(VarEnum.VT_UNKNOWN)]
+        [InlineData(VarEnum.VT_DISPATCH)]
+        [ActiveIssue("https://github.com/dotnet/runtime/issues/55742", TestRuntimes.Mono)]
+        [SkipOnPlatform(TestPlatforms.Browser, "ComWrappers is not supported on WebAssembly")]
+        public unsafe void ByRef_Null_ReleasesPreviousInterface(VarEnum elementType)
+        {
+            nint* table = stackalloc nint[3];
+            InitializeReferenceCountVtable(table);
+            ReferenceCountedUnknown previous = new() { Table = table, References = 1 };
+            nint storage = (nint)(&previous);
+            ComVariant variant = ComVariant.CreateRaw(VarEnum.VT_BYREF | elementType, (nint)(&storage));
+            ComVariantMarshaller.RefPropagate marshaller = default;
+            marshaller.FromUnmanaged(variant);
+            marshaller.FromManaged(null);
+            try
+            {
+                ComVariant updated = marshaller.ToUnmanaged();
+                marshaller.Free();
+                Assert.Equal(variant.VarType, updated.VarType);
+                Assert.Equal(variant.GetRawDataRef<nint>(), updated.GetRawDataRef<nint>());
+                Assert.Equal(0, storage);
+                Assert.Equal(0, previous.References);
+                Assert.Equal(1, previous.Releases);
+            }
+            finally
+            {
+                if (previous.References != 0)
+                {
+                    Marshal.Release((nint)(&previous));
+                }
+            }
+        }
+
+        [Fact]
+        [ActiveIssue("https://github.com/dotnet/runtime/issues/55742", TestRuntimes.Mono)]
+        [SkipOnPlatform(TestPlatforms.Browser, "ComWrappers is not supported on WebAssembly")]
+        public unsafe void ByRef_Unknown_Replacement_ReleasesPreviousInterface()
+        {
+            nint* table = stackalloc nint[3];
+            InitializeReferenceCountVtable(table);
+            ReferenceCountedUnknown previous = new() { Table = table, References = 1 };
+            nint storage = (nint)(&previous);
+            ComVariant variant = ComVariant.CreateRaw(VarEnum.VT_BYREF | VarEnum.VT_UNKNOWN, (nint)(&storage));
+            ComVariantMarshaller.RefPropagate marshaller = default;
+            marshaller.FromUnmanaged(variant);
+            object next = new ComExposedType();
+            marshaller.FromManaged(next);
+            try
+            {
+                _ = marshaller.ToUnmanaged();
+                Assert.Equal(0, previous.References);
+                Assert.Equal(1, previous.Releases);
+                Assert.True(ComWrappers.TryGetObject(storage, out object wrapped));
+                Assert.Same(next, wrapped);
+            }
+            finally
+            {
+                if (storage != (nint)(&previous))
+                {
+                    Marshal.Release(storage);
+                }
+                if (previous.References != 0)
+                {
+                    Marshal.Release((nint)(&previous));
+                }
+            }
+        }
+
+        [Fact]
+        [ActiveIssue("https://github.com/dotnet/runtime/issues/55742", TestRuntimes.Mono)]
+        [SkipOnPlatform(TestPlatforms.Browser, "ComWrappers is not supported on WebAssembly")]
+        public unsafe void ByRef_Unknown_SameObject_PreservesReferenceCount()
+        {
+            object value = new ComExposedType();
+            ComVariant owned = ComVariantMarshaller.ConvertToUnmanaged(value);
+            nint storage = owned.GetRawDataRef<nint>();
+            int before = Marshal.AddRef(storage) - 1;
+            Marshal.Release(storage);
+            ComVariant variant = ComVariant.CreateRaw(VarEnum.VT_BYREF | VarEnum.VT_UNKNOWN, (nint)(&storage));
+            ComVariantMarshaller.RefPropagate marshaller = default;
+            marshaller.FromUnmanaged(variant);
+            marshaller.FromManaged(value);
+            int referencesToRelease = 1;
+            try
+            {
+                _ = marshaller.ToUnmanaged();
+                Assert.Equal(owned.GetRawDataRef<nint>(), storage);
+                int after = Marshal.AddRef(storage) - 1;
+                Marshal.Release(storage);
+                referencesToRelease += Math.Max(0, after - before);
+                Assert.Equal(before, after);
+            }
+            finally
+            {
+                // Also clean up any extra reference exposed by a failing regression.
+                for (int i = 0; i < referencesToRelease; i++)
+                {
+                    Marshal.Release(storage);
+                }
+            }
+        }
+
+        private unsafe struct ReferenceCountedUnknown
+        {
+            public nint* Table;
+            public int References;
+            public int Releases;
+        }
+
+        private static unsafe void InitializeReferenceCountVtable(nint* table)
+        {
+            table[0] = (nint)(delegate* unmanaged[Stdcall]<nint, Guid*, nint*, int>)&ReferenceCountQueryInterface;
+            table[1] = (nint)(delegate* unmanaged[Stdcall]<nint, uint>)&ReferenceCountAddRef;
+            table[2] = (nint)(delegate* unmanaged[Stdcall]<nint, uint>)&ReferenceCountRelease;
+        }
+
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvStdcall) })]
+        private static unsafe int ReferenceCountQueryInterface(nint instance, Guid* iid, nint* result)
+        {
+            *result = 0;
+            return unchecked((int)0x80004002);
+        }
+
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvStdcall) })]
+        private static unsafe uint ReferenceCountAddRef(nint instance) => (uint)++((ReferenceCountedUnknown*)instance)->References;
+
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvStdcall) })]
+        private static unsafe uint ReferenceCountRelease(nint instance)
+        {
+            ((ReferenceCountedUnknown*)instance)->Releases++;
+            return (uint)--((ReferenceCountedUnknown*)instance)->References;
+        }
     }
 }

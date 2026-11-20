@@ -165,7 +165,11 @@ namespace System.Reflection.Emit
                     }
                 }
 
-                if ((typeBuilder.Attributes & TypeAttributes.ExplicitLayout) != 0)
+                // A sequential type only needs a ClassLayout row for a non-default packing or size, matching
+                // the runtime TypeBuilder and the compilers. Explicit layout types always get one.
+                TypeAttributes layoutKind = typeBuilder.Attributes & TypeAttributes.LayoutMask;
+                if (layoutKind == TypeAttributes.ExplicitLayout ||
+                    (layoutKind == TypeAttributes.SequentialLayout && (typeBuilder.PackingSize != PackingSize.Unspecified || typeBuilder.Size != 0)))
                 {
                     _metadataBuilder.AddTypeLayout(typeHandle, (ushort)typeBuilder.PackingSize, (uint)typeBuilder.Size);
                 }
@@ -595,6 +599,16 @@ namespace System.Reflection.Emit
             {
                 handle = AddDocument(docWriter.URL, docWriter.Language, docWriter.HashAlgorithm, docWriter.Hash);
                 _docHandles.Add(docWriter, handle);
+                if (docWriter.Source is byte[] source)
+                {
+                    var embeddedSource = new BlobBuilder();
+                    // Portable PDB EmbeddedSource uses a zero header for uncompressed bytes.
+                    embeddedSource.WriteInt32(0);
+                    embeddedSource.WriteBytes(source);
+                    _pdbBuilder.AddCustomDebugInformation(handle,
+                        _pdbBuilder.GetOrAddGuid(new Guid("0e8a571b-6926-466e-b4ad-8ab04611f5fe")),
+                        _pdbBuilder.GetOrAddBlob(embeddedSource));
+                }
             }
 
             return handle;
